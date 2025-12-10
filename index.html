@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard IMC – Ventas desde Excel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Estilos -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Librerías externas -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.0/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Dashboard IMC – Ventas desde Excel</h1>
+    <small>Carga el archivo IMC.xlsx (hojas <b>facturas</b> y <b>notas</b>) para analizar ventas, utilidad, márgenes y m² por almacén.</small>
+  </div>
+  <div class="file-input">
+    <label for="file-input">📂 Cargar archivo Excel</label>
+    <input type="file" id="file-input" accept=".xlsx,.xls" />
+    <span id="file-name"></span>
+  </div>
+</header>
+
+<main>
+  <!-- Filtros fijos -->
+  <div class="filters-row">
+    <div class="filter-group">
+      <span class="filter-label">Año:</span>
+      <select id="filter-year" class="filter-select" disabled>
+        <option value="all">Todos los años</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Almacén:</span>
+      <select id="filter-store" class="filter-select" disabled>
+        <option value="all">Todos los almacenes</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Tipo de factura:</span>
+      <select id="filter-type" class="filter-select" disabled>
+        <option value="both">Contado + Crédito</option>
+        <option value="contado">Solo contado</option>
+        <option value="credito">Solo crédito</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Categoría:</span>
+      <select id="filter-category" class="filter-select" disabled>
+        <option value="all">Todas las categorías</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="error" class="error"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
+    <button class="tab-btn" data-tab="tab-yoy">Comparativo YoY</button>
+    <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
+  </div>
+
+  <!-- TAB 1: RESUMEN -->
+  <section id="tab-resumen" class="tab-panel active">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-title">Ventas totales</div>
+        <div id="kpi-ventas" class="kpi-value">$0</div>
+        <div id="kpi-ventas-sub" class="kpi-sub">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Utilidad bruta</div>
+        <div id="kpi-utilidad" class="kpi-value">$0</div>
+        <div class="kpi-sub">Basada en Subtotal y Costo Entrada.</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Margen bruto</div>
+        <div id="kpi-margen" class="kpi-value">0%</div>
+        <div id="kpi-margen-sub" class="kpi-sub">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Ventas por m²</div>
+        <div id="kpi-m2" class="kpi-value">$0</div>
+        <div id="kpi-m2-sub" class="kpi-sub">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Transacciones</div>
+        <div id="kpi-trans" class="kpi-value">0</div>
+        <div class="kpi-sub">Facturas + notas REM válidas.</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Clientes únicos</div>
+        <div id="kpi-clientes" class="kpi-value">0</div>
+        <div class="kpi-sub">Con al menos una transacción.</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Ventas por mes</h2>
+        <small>Aplicando los filtros superiores.</small>
+        <canvas id="chart-mensual"></canvas>
+      </div>
+      <div class="card">
+        <h2>Ventas y m² por almacén</h2>
+        <small>Comparación de ventas totales vs ventas por metro cuadrado.</small>
+        <canvas id="chart-almacen"></canvas>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Top 5 clientes</h2>
+        <small>Por ventas totales.</small>
+        <div class="detail-table-wrapper" style="max-height:260px">
+          <table id="tabla-top-clientes">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Top 5 vendedores</h2>
+        <small>Por ventas totales.</small>
+        <div class="detail-table-wrapper" style="max-height:260px">
+          <table id="tabla-top-vendedores">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Vendedor</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Operaciones</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: COMPARATIVO YOY -->
+  <section id="tab-yoy" class="tab-panel">
+    <div class="card">
+      <h2>Comparativo YoY</h2>
+      <small>Compara el último año disponible contra el anterior aplicando filtros de Almacén, Tipo de factura y Categoría (ignora el filtro de año).</small>
+      <div class="detail-table-wrapper" style="max-height:360px; margin-top:8px;">
+        <table id="tabla-yoy">
+          <thead>
+            <tr>
+              <th>Métrica</th>
+              <th class="text-right" id="th-year-prev">Año Anterior</th>
+              <th class="text-right" id="th-year-current">Año Actual</th>
+              <th class="text-right">Crecimiento %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted">Haz clic en una métrica para ver un detalle por categoría.</p>
+    </div>
+  </section>
+
+  <!-- TAB 3: DETALLE -->
+  <section id="tab-detalle" class="tab-panel">
+    <div class="card">
+      <h2>Detalle de datos</h2>
+      <small>Arma tu propia tabla. Selecciona columnas desde la paleta y filtra como en Excel.</small>
+
+      <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <span class="muted">Buscar (cliente / producto / factura):</span>
+        <input id="search-global" class="search-global" placeholder="Escribe texto para filtrar..." />
+      </div>
+
+      <div style="margin-top:8px; font-size:0.78rem; color:var(--txt-soft);">Encabezados disponibles</div>
+      <div id="chips-container" class="chips-row"></div>
+
+      <div class="detail-table-wrapper">
+        <table id="tabla-detalle">
+          <thead>
+            <tr id="detalle-header-row"></tr>
+            <tr id="detalle-filter-row"></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted">Tabla con 7 columnas. Haz clic en un encabezado de la paleta para agregarlo / quitarlo de la tabla.</p>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL DETALLE MÉTRICA -->
+<div id="modal-backdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div id="modal-title" style="font-size:0.95rem;font-weight:600;"></div>
+        <div id="modal-sub" class="muted"></div>
+      </div>
+      <button class="btn-close" id="modal-close">&times;</button>
+    </div>
+    <div class="detail-table-wrapper">
+      <table id="modal-table">
+        <thead>
+          <tr>
+            <th>Categoría</th>
+            <th class="text-right" id="modal-year-prev">Año Anterior</th>
+            <th class="text-right" id="modal-year-current">Año Actual</th>
+            <th class="text-right">Crecimiento %</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Lógica -->
+<script src="app.js"></script>
+</body>
+</html>
