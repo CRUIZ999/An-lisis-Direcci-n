@@ -5,10 +5,8 @@
   <title>Dashboard de Ventas – El Cedro</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Estilos propios -->
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Librerías necesarias -->
   <!-- SheetJS para leer Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Chart.js para gráficas -->
@@ -33,7 +31,7 @@
       </div>
     </header>
 
-    <!-- FILTROS FIJOS SUPERIORES -->
+    <!-- FILTROS SUPERIORES FIJOS -->
     <section class="filters-bar">
       <div class="filter-group">
         <label for="filter-year">Año:</label>
@@ -72,9 +70,8 @@
       <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
     </nav>
 
-    <!-- ==================== TAB 1: RESUMEN ==================== -->
+    <!-- TAB 1: RESUMEN -->
     <main id="tab-resumen" class="tab-panel active">
-      <!-- KPI CARDS -->
       <section class="kpi-grid">
         <article class="kpi-card">
           <h3>Ventas</h3>
@@ -113,7 +110,6 @@
         </article>
       </section>
 
-      <!-- GRÁFICAS -->
       <section class="charts-grid">
         <div class="chart-card">
           <h3>Ventas por mes</h3>
@@ -125,7 +121,6 @@
         </div>
       </section>
 
-      <!-- TOPS -->
       <section class="tables-grid">
         <div class="table-card">
           <h3>Top 5 clientes por ventas</h3>
@@ -139,8 +134,7 @@
                 <th class="text-right">Margen %</th>
               </tr>
             </thead>
-            <tbody id="tabla-top-clientes">
-            </tbody>
+            <tbody id="tabla-top-clientes"></tbody>
           </table>
         </div>
 
@@ -156,21 +150,18 @@
                 <th class="text-right">Operaciones</th>
               </tr>
             </thead>
-            <tbody id="tabla-top-vendedores">
-            </tbody>
+            <tbody id="tabla-top-vendedores"></tbody>
           </table>
         </div>
       </section>
     </main>
 
-    <!-- ==================== TAB 2: COMPARATIVO YOY ==================== -->
+    <!-- TAB 2: YOY -->
     <main id="tab-yoy" class="tab-panel">
       <p class="muted">
         Comparación del último año vs el anterior aplicando los filtros de almacén, tipo de factura y categoría.
-        El filtro de año se ignora en esta vista.
-        Haz clic en una métrica para ver el detalle por categoría o m².
+        El filtro de año se ignora en esta vista. Haz clic en una métrica para ver detalle.
       </p>
-
       <div class="table-card">
         <table>
           <thead>
@@ -181,22 +172,16 @@
               <th class="text-right">Crecimiento %</th>
             </tr>
           </thead>
-          <tbody id="tabla-yoy">
-          </tbody>
+          <tbody id="tabla-yoy"></tbody>
         </table>
       </div>
     </main>
 
-    <!-- ==================== TAB 3: DETALLE DE DATOS ==================== -->
+    <!-- TAB 3: DETALLE -->
     <main id="tab-detalle" class="tab-panel">
       <div class="detalle-header">
         <label for="search-global">Buscar (cliente / producto / factura):</label>
         <input id="search-global" type="text" placeholder="Escribe texto para filtrar..." />
-      </div>
-
-      <div class="chips-wrapper">
-        <p class="muted">Encabezados disponibles (máx. 7 columnas):</p>
-        <div id="chips-container" class="chips-container"></div>
       </div>
 
       <div class="table-card wide">
@@ -205,14 +190,13 @@
             <tr id="detalle-header-row"></tr>
             <tr id="detalle-filter-row"></tr>
           </thead>
-          <tbody id="tabla-detalle">
-          </tbody>
+          <tbody id="tabla-detalle"></tbody>
         </table>
       </div>
     </main>
   </div>
 
-  <!-- MODAL PARA DETALLE DE MÉTRICAS -->
+  <!-- MODAL YOY -->
   <div id="modal-backdrop" class="modal-backdrop">
     <div class="modal">
       <header class="modal-header">
@@ -220,7 +204,6 @@
         <button id="modal-close" class="modal-close">✕</button>
       </header>
       <p id="modal-sub" class="muted"></p>
-
       <div class="table-card">
         <table id="modal-table">
           <thead>
@@ -231,14 +214,12 @@
               <th class="text-right">Crecimiento %</th>
             </tr>
           </thead>
-          <tbody>
-          </tbody>
+          <tbody></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Lógica principal -->
   <script src="app.js"></script>
 </body>
 </html>
