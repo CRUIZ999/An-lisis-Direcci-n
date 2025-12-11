@@ -7,7 +7,7 @@
 
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- SheetJS para leer Excel y exportar a XLSX -->
+  <!-- SheetJS para leer Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Chart.js para gráficas -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -36,13 +36,13 @@
       <div class="filter-group">
         <label for="filter-year">Año:</label>
         <select id="filter-year" disabled>
-          <option value="all">Todos los años</option>
+          <option>Todos los años</option>
         </select>
       </div>
       <div class="filter-group">
         <label for="filter-store">Almacén:</label>
         <select id="filter-store" disabled>
-          <option value="all">Todos los almacenes</option>
+          <option>Todos los almacenes</option>
         </select>
       </div>
       <div class="filter-group">
@@ -56,43 +56,43 @@
       <div class="filter-group">
         <label for="filter-category">Categoría:</label>
         <select id="filter-category" disabled>
-          <option value="all">Todas las categorías</option>
+          <option>Todas las categorías</option>
         </select>
       </div>
     </section>
 
-    <!-- BARRA DE CONFIGURACIÓN RÁPIDA -->
+    <!-- CONFIGURACIÓN RÁPIDA -->
     <section class="quick-config">
       <div class="qc-group">
-        <label for="config-metric">Métrica principal:</label>
-        <select id="config-metric">
-          <option value="ventas" selected>Ventas (Subtotal)</option>
+        <label for="qc-main-metric">Métrica principal (Resumen)</label>
+        <select id="qc-main-metric">
+          <option value="ventas">Ventas</option>
           <option value="utilidad">Utilidad bruta</option>
-          <option value="margen">Margen bruto %</option>
+          <option value="margen">Margen %</option>
+          <option value="m2">Ventas por m²</option>
         </select>
       </div>
 
       <div class="qc-group">
-        <label for="config-chart-type">Gráfica mensual:</label>
-        <select id="config-chart-type">
-          <option value="bar" selected>Barras</option>
-          <option value="line">Línea</option>
+        <label for="qc-chart-type">Tipo de gráfica de ventas</label>
+        <select id="qc-chart-type">
+          <option value="bar">Barras</option>
+          <option value="line">Líneas</option>
         </select>
       </div>
 
       <div class="qc-group">
-        <label for="config-table-mode">Vista de tabla:</label>
-        <select id="config-table-mode">
-          <option value="basic">Básica (5)</option>
-          <option value="standard" selected>Standard (7)</option>
-          <option value="analytic">Analítica (10)</option>
+        <label for="qc-table-mode">Modo de tabla (Detalle)</label>
+        <select id="qc-table-mode">
+          <option value="compact">Compacto</option>
+          <option value="comfortable">Cómodo</option>
         </select>
       </div>
 
-      <div class="qc-group qc-group-inline">
+      <div class="qc-group-inline">
         <label class="qc-checkbox">
-          <input type="checkbox" id="config-negativos" />
-          <span>Solo mostrar márgenes negativos</span>
+          <input type="checkbox" id="qc-hide-negative-margin" />
+          <span>Ocultar filas con margen negativo en Detalle</span>
         </label>
       </div>
     </section>
@@ -104,6 +104,8 @@
       <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
       <button class="tab-btn" data-tab="tab-yoy">Comparativo YoY</button>
       <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
+      <button class="tab-btn" data-tab="tab-explorador">Explorador de gráficos</button>
+      <button class="tab-btn" data-tab="tab-config">Configuración</button>
     </nav>
 
     <!-- TAB 1: RESUMEN -->
@@ -148,7 +150,7 @@
 
       <section class="charts-grid">
         <div class="chart-card">
-          <h3>Serie mensual (según métrica)</h3>
+          <h3>Ventas por mes</h3>
           <canvas id="chart-mensual"></canvas>
         </div>
         <div class="chart-card">
@@ -159,7 +161,7 @@
 
       <section class="tables-grid">
         <div class="table-card">
-          <h3>Top 5 clientes</h3>
+          <h3>Top 5 clientes por ventas</h3>
           <table>
             <thead>
               <tr>
@@ -175,7 +177,7 @@
         </div>
 
         <div class="table-card">
-          <h3>Top 5 vendedores</h3>
+          <h3>Top 5 vendedores por ventas</h3>
           <table>
             <thead>
               <tr>
@@ -220,21 +222,18 @@
         <input id="search-global" type="text" placeholder="Escribe texto para filtrar..." />
       </div>
 
-      <!-- NUEVO: paleta de columnas -->
-      <div class="detalle-config">
-        <div class="detalle-config-text">
+      <div class="detalle-palette">
+        <div class="detalle-palette-title">
           <strong>Encabezados disponibles</strong>
-          <p class="muted">
-            Arrastra un encabezado y suéltalo sobre cualquiera de las columnas de la tabla para cambiar el diseño.
-          </p>
+          <span>Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas de la tabla inferior.</span>
         </div>
-        <div id="detalle-cols-pool" class="chip-container">
-          <!-- Se llena dinámicamente con JS -->
+        <div id="detalle-chip-container" class="chip-container">
+          <!-- chips dinámicos -->
         </div>
       </div>
 
       <div class="table-card wide">
-        <table>
+        <table class="detalle-table">
           <thead>
             <tr id="detalle-header-row"></tr>
             <tr id="detalle-filter-row"></tr>
@@ -242,6 +241,101 @@
           <tbody id="tabla-detalle"></tbody>
         </table>
       </div>
+      <p class="muted">
+        Tip: haz clic en una fila para ver el detalle de artículos de esa factura/nota.
+      </p>
+    </main>
+
+    <!-- TAB 4: EXPLORADOR DE GRÁFICOS -->
+    <main id="tab-explorador" class="tab-panel">
+      <p class="muted">
+        Elige la dimensión, métrica y tipo de gráfica para explorar los datos de forma dinámica.
+        Los filtros superiores (año, almacén, tipo, categoría) siguen aplicando.
+      </p>
+
+      <section class="quick-config">
+        <div class="qc-group">
+          <label>Dimensión</label>
+          <select id="exp-dimension">
+            <option value="mes">Mes</option>
+            <option value="almacen">Almacén</option>
+            <option value="categoria">Categoría</option>
+            <option value="vendedor">Vendedor</option>
+            <option value="cliente">Cliente</option>
+          </select>
+        </div>
+
+        <div class="qc-group">
+          <label>Métrica</label>
+          <select id="exp-metrica">
+            <option value="subtotal">Ventas (Subtotal)</option>
+            <option value="utilidad">Utilidad bruta</option>
+            <option value="margen">Margen %</option>
+            <option value="ops">Número de operaciones</option>
+            <option value="cred_pct">% Ventas a crédito</option>
+          </select>
+        </div>
+
+        <div class="qc-group">
+          <label>Tipo de gráfica</label>
+          <select id="exp-chart-type">
+            <option value="bar">Barras</option>
+            <option value="line">Líneas</option>
+            <option value="pie">Pastel</option>
+            <option value="doughnut">Dona</option>
+          </select>
+        </div>
+
+        <div class="qc-group-inline">
+          <label class="qc-checkbox">
+            <input type="checkbox" id="exp-excluir-negativos" checked />
+            <span>Excluir negativos en métricas de margen / porcentaje</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="charts-grid">
+        <div class="chart-card">
+          <h3 id="exp-chart-title">Gráfica dinámica</h3>
+          <canvas id="exp-chart"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 5: CONFIGURACIÓN GENERAL -->
+    <main id="tab-config" class="tab-panel">
+      <h2>Configuración del dashboard</h2>
+      <p class="muted">
+        Ajusta algunas opciones generales. Se guardan en este navegador para que mantengas tu vista preferida.
+      </p>
+
+      <section class="table-card">
+        <h3>Opciones de tabla de detalle</h3>
+        <div class="detail-config">
+          <div class="filter-group">
+            <label for="conf-max-filas">Máximo de filas a mostrar en detalle:</label>
+            <input id="conf-max-filas" type="number" min="100" max="50000" step="100" value="5000" />
+          </div>
+
+          <div class="filter-group">
+            <label>
+              <input type="checkbox" id="conf-resaltar-negativos" checked />
+              Resaltar importes negativos en rojo
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <label>
+              <input type="checkbox" id="conf-guardar-vista" checked />
+              Guardar filtros y configuración en este navegador (localStorage)
+            </label>
+          </div>
+
+          <button id="conf-reset" class="tab-btn">
+            Restablecer configuración
+          </button>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -269,37 +363,37 @@
     </div>
   </div>
 
-  <!-- MODAL DETALLE FACTURA/NOTA -->
-  <div id="modal-op-backdrop" class="modal-backdrop">
+  <!-- MODAL DETALLE FACTURA -->
+  <div id="modal-factura-backdrop" class="modal-backdrop">
     <div class="modal">
       <header class="modal-header">
-        <h2 id="modal-op-title">Detalle de factura / nota</h2>
-        <button id="modal-op-close" class="modal-close">✕</button>
+        <h2 id="modal-factura-title">Detalle de factura / nota</h2>
+        <button id="modal-factura-close" class="modal-close">✕</button>
       </header>
+      <p id="modal-factura-sub" class="muted"></p>
 
-      <p id="modal-op-sub" class="muted"></p>
-
-      <div class="modal-toolbar">
-        <button id="modal-op-export-excel" class="btn">⬇ Exportar a Excel</button>
-        <button id="modal-op-export-pdf" class="btn">⬇ Exportar a PDF</button>
-        <button id="modal-op-ver-detalle" class="btn">🔍 Ver en Detalle</button>
+      <div class="modal-actions">
+        <button id="modal-factura-export-xls" class="pill-btn">⬇ Exportar a Excel</button>
+        <button id="modal-factura-export-pdf" class="pill-btn">⬇ Exportar a PDF</button>
+        <button id="modal-factura-ver-detalle" class="pill-btn">Ir a Detalle filtrado</button>
       </div>
 
       <div class="table-card">
-        <table>
+        <table id="modal-factura-table">
           <thead>
             <tr>
               <th>Fecha</th>
               <th>Hora</th>
+              <th>Factura / Nota</th>
               <th>Cliente</th>
-              <th>Descripción</th>
+              <th>Artículo</th>
               <th class="text-right">Cantidad</th>
               <th class="text-right">Costo</th>
-              <th class="text-right">Precio s/IVA</th>
+              <th class="text-right">Precio s/ IVA</th>
               <th>Vendedor</th>
             </tr>
           </thead>
-          <tbody id="modal-op-body"></tbody>
+          <tbody></tbody>
         </table>
       </div>
     </div>
