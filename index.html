@@ -1,492 +1,310 @@
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #050814;
-  color: #f5f5f5;
-}
-
-.app {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 16px 24px 32px;
-}
-
-/* HEADER */
-
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-  margin-bottom: 16px;
-}
-
-.title-block h1 {
-  margin: 0 0 4px;
-}
-
-.subtitle {
-  margin: 0;
-  color: #aab2c5;
-}
-
-.file-block {
-  text-align: right;
-}
-
-.file-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: #1e293b;
-  border-radius: 999px;
-  cursor: pointer;
-  border: 1px solid #334155;
-  font-size: 14px;
-}
-
-.file-label input {
-  display: none;
-}
-
-.file-name {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-/* FILTROS SUPERIORES */
-
-.filters-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 12px 16px;
-  background: #020617;
-  border-radius: 12px;
-  border: 1px solid #1e293b;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.filter-group {
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 14px;
-}
-
-.filter-group label {
-  color: #cbd5f5;
-}
-
-.filter-group select {
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid #334155;
-  background: #020617;
-  color: #e2e8f0;
-}
-
-/* BARRA DE CONFIGURACIÓN RÁPIDA */
-
-.quick-config {
-  margin: 10px 0 8px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid #1e293b;
-  background: #020617;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.qc-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  min-width: 180px;
-}
-
-.qc-group select {
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid #334155;
-  background: #020617;
-  color: #e2e8f0;
-  font-size: 12px;
-}
-
-.qc-group-inline {
-  justify-content: flex-end;
-}
-
-.qc-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.qc-checkbox input {
-  accent-color: #38bdf8;
-}
-
-/* TABS */
-
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin: 16px 0 8px;
-  border-bottom: 1px solid #1e293b;
-}
-
-.tab-btn {
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  border-radius: 999px 999px 0 0;
-}
-
-.tab-btn.active {
-  background: #020617;
-  color: #f9fafb;
-  border: 1px solid #1e293b;
-  border-bottom-color: transparent;
-}
-
-.tab-panel {
-  display: none;
-  padding-top: 8px;
-}
-
-.tab-panel.active {
-  display: block;
-}
-
-/* KPIs */
-
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.kpi-card {
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: radial-gradient(circle at top left, #1d2a3f, #020617);
-  border: 1px solid #1e293b;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-}
-
-.kpi-card h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
-}
-
-.kpi-main {
-  font-size: 24px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.kpi-sub {
-  margin: 0;
-  font-size: 12px;
-  color: #93c5fd;
-}
-
-/* GRÁFICAS */
-
-.charts-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.chart-card {
-  padding: 16px;
-  background: #020617;
-  border-radius: 16px;
-  border: 1px solid #1e293b;
-}
-
-/* TABLAS */
-
-.tables-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-}
-
-.table-card {
-  padding: 16px;
-  background: #020617;
-  border-radius: 16px;
-  border: 1px solid #1e293b;
-}
-
-.table-card.wide {
-  margin-top: 16px;
-}
-
-.table-card h3 {
-  margin-top: 0;
-  margin-bottom: 8px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-thead tr {
-  background: #020617;
-}
-
-th, td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #1e293b;
-}
-
-th {
-  text-align: left;
-  color: #cbd5f5;
-}
-
-td {
-  color: #e2e8f0;
-}
-
-.text-right {
-  text-align: right;
-}
-
-.neg {
-  color: #f97373;
-}
-
-/* PASTILLAS YOY */
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-}
-
-.pill.pos {
-  background: rgba(22, 163, 74, 0.12);
-  color: #4ade80;
-}
-
-.pill.neg {
-  background: rgba(248, 113, 113, 0.12);
-  color: #fca5a5;
-}
-
-.pill.neu {
-  background: rgba(148, 163, 184, 0.12);
-  color: #cbd5e1;
-}
-
-/* DETALLE */
-
-.detalle-header {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.detalle-header input {
-  flex: 1;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid #334155;
-  background: #020617;
-  color: #e2e8f0;
-}
-
-.filter-input {
-  width: 100%;
-  padding: 3px 6px;
-  border-radius: 6px;
-  border: 1px solid #1e293b;
-  background: #020617;
-  color: #e2e8f0;
-  font-size: 11px;
-}
-
-/* DETALLE – CONFIGURADOR DE COLUMNAS */
-
-.detalle-config {
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #1e293b;
-  background: #020617;
-}
-
-.detalle-config-text {
-  margin-bottom: 8px;
-}
-
-.chip-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  border: 1px solid #1d4ed8;
-  background: #020617;
-  color: #e2e8f0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  cursor: grab;
-  user-select: none;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-}
-
-.chip:hover {
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.08);
-}
-
-.chip:active {
-  cursor: grabbing;
-  transform: scale(0.97);
-}
-
-.chip.dragging {
-  opacity: 0.5;
-}
-
-/* Encabezados que aceptan drop */
-
-th.th-drop-target {
-  position: relative;
-}
-
-th.th-drop-target.drag-over {
-  outline: 1px dashed #38bdf8;
-  background: rgba(15, 23, 42, 0.8);
-}
-
-th.th-drop-target .th-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-th.th-drop-target .th-label span.helper {
-  font-size: 10px;
-  opacity: 0.6;
-}
-
-/* MODAL */
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.7);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal-backdrop.active {
-  display: flex;
-}
-
-.modal {
-  width: min(900px, 95vw);
-  max-height: 90vh;
-  overflow: auto;
-  background: #020617;
-  border-radius: 16px;
-  border: 1px solid #1e293b;
-  padding: 16px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.modal-close {
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 18px;
-}
-
-.modal-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 6px 0 10px;
-}
-
-/* Botones genéricos */
-
-.btn {
-  border-radius: 999px;
-  border: 1px solid #334155;
-  background: #020617;
-  color: #e2e8f0;
-  font-size: 11px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.btn:hover {
-  background: #0f172a;
-  border-color: #38bdf8;
-}
-
-/* OTROS */
-
-.error {
-  color: #f87171;
-  margin-top: 8px;
-  font-size: 12px;
-}
-
-.muted {
-  color: #94a3b8;
-  font-size: 12px;
-  margin: 4px 0 10px;
-}
-
-.sortable {
-  cursor: pointer;
-}
-.sortable span {
-  font-size: 10px;
-  opacity: 0.7;
-}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard de Ventas – El Cedro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- SheetJS para leer Excel y exportar a XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Chart.js para gráficas -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="title-block">
+        <h1>Dashboard de Ventas</h1>
+        <p class="subtitle">
+          Carga un archivo de Excel (hojas <strong>facturas</strong> y <strong>notas</strong>) para analizar ventas, utilidad y márgenes.
+        </p>
+      </div>
+      <div class="file-block">
+        <label class="file-label">
+          <input id="file-input" type="file" accept=".xlsx,.xls" />
+          <span>📂 Cargar archivo Excel</span>
+        </label>
+        <div id="file-name" class="file-name">Ningún archivo seleccionado</div>
+      </div>
+    </header>
+
+    <!-- FILTROS SUPERIORES FIJOS -->
+    <section class="filters-bar">
+      <div class="filter-group">
+        <label for="filter-year">Año:</label>
+        <select id="filter-year" disabled>
+          <option value="all">Todos los años</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-store">Almacén:</label>
+        <select id="filter-store" disabled>
+          <option value="all">Todos los almacenes</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-type">Tipo de factura:</label>
+        <select id="filter-type" disabled>
+          <option value="both">Contado + Crédito</option>
+          <option value="contado">Solo contado</option>
+          <option value="credito">Solo crédito</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-category">Categoría:</label>
+        <select id="filter-category" disabled>
+          <option value="all">Todas las categorías</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- BARRA DE CONFIGURACIÓN RÁPIDA -->
+    <section class="quick-config">
+      <div class="qc-group">
+        <label for="config-metric">Métrica principal:</label>
+        <select id="config-metric">
+          <option value="ventas" selected>Ventas (Subtotal)</option>
+          <option value="utilidad">Utilidad bruta</option>
+          <option value="margen">Margen bruto %</option>
+        </select>
+      </div>
+
+      <div class="qc-group">
+        <label for="config-chart-type">Gráfica mensual:</label>
+        <select id="config-chart-type">
+          <option value="bar" selected>Barras</option>
+          <option value="line">Línea</option>
+        </select>
+      </div>
+
+      <div class="qc-group">
+        <label for="config-table-mode">Vista de tabla:</label>
+        <select id="config-table-mode">
+          <option value="basic">Básica (5)</option>
+          <option value="standard" selected>Standard (7)</option>
+          <option value="analytic">Analítica (10)</option>
+        </select>
+      </div>
+
+      <div class="qc-group qc-group-inline">
+        <label class="qc-checkbox">
+          <input type="checkbox" id="config-negativos" />
+          <span>Solo mostrar márgenes negativos</span>
+        </label>
+      </div>
+    </section>
+
+    <div id="error" class="error"></div>
+
+    <!-- TABS -->
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
+      <button class="tab-btn" data-tab="tab-yoy">Comparativo YoY</button>
+      <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
+    </nav>
+
+    <!-- TAB 1: RESUMEN -->
+    <main id="tab-resumen" class="tab-panel active">
+      <section class="kpi-grid">
+        <article class="kpi-card">
+          <h3>Ventas</h3>
+          <div id="kpi-ventas" class="kpi-main">$0</div>
+          <p id="kpi-ventas-sub" class="kpi-sub">Periodo: —</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Utilidad bruta</h3>
+          <div id="kpi-utilidad" class="kpi-main">$0</div>
+          <p id="kpi-margen-sub" class="kpi-sub">—</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Margen bruto %</h3>
+          <div id="kpi-margen" class="kpi-main">0.0%</div>
+          <p class="kpi-sub">Margen promedio de las operaciones válidas</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Ventas por m²</h3>
+          <div id="kpi-m2" class="kpi-main">$0/m²</div>
+          <p id="kpi-m2-sub" class="kpi-sub">—</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Transacciones</h3>
+          <div id="kpi-trans" class="kpi-main">0</div>
+          <p class="kpi-sub">Facturas + notas (únicas)</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Clientes únicos</h3>
+          <div id="kpi-clientes" class="kpi-main">0</div>
+          <p class="kpi-sub">En el periodo filtrado</p>
+        </article>
+      </section>
+
+      <section class="charts-grid">
+        <div class="chart-card">
+          <h3>Serie mensual (según métrica)</h3>
+          <canvas id="chart-mensual"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Ventas y ventas por m² por almacén</h3>
+          <canvas id="chart-almacen"></canvas>
+        </div>
+      </section>
+
+      <section class="tables-grid">
+        <div class="table-card">
+          <h3>Top 5 clientes</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-top-clientes"></tbody>
+          </table>
+        </div>
+
+        <div class="table-card">
+          <h3>Top 5 vendedores</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Vendedor</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Operaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-top-vendedores"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 2: YOY -->
+    <main id="tab-yoy" class="tab-panel">
+      <p class="muted">
+        Comparación del último año vs el anterior aplicando los filtros de almacén, tipo de factura y categoría.
+        El filtro de año se ignora en esta vista. Haz clic en una métrica para ver detalle.
+      </p>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Métrica</th>
+              <th id="th-year-prev" class="text-right">Año N-1</th>
+              <th id="th-year-current" class="text-right">Año N</th>
+              <th class="text-right">Crecimiento %</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-yoy"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- TAB 3: DETALLE -->
+    <main id="tab-detalle" class="tab-panel">
+      <div class="detalle-header">
+        <label for="search-global">Buscar (cliente / producto / factura):</label>
+        <input id="search-global" type="text" placeholder="Escribe texto para filtrar..." />
+      </div>
+
+      <!-- NUEVO: paleta de columnas -->
+      <div class="detalle-config">
+        <div class="detalle-config-text">
+          <strong>Encabezados disponibles</strong>
+          <p class="muted">
+            Arrastra un encabezado y suéltalo sobre cualquiera de las columnas de la tabla para cambiar el diseño.
+          </p>
+        </div>
+        <div id="detalle-cols-pool" class="chip-container">
+          <!-- Se llena dinámicamente con JS -->
+        </div>
+      </div>
+
+      <div class="table-card wide">
+        <table>
+          <thead>
+            <tr id="detalle-header-row"></tr>
+            <tr id="detalle-filter-row"></tr>
+          </thead>
+          <tbody id="tabla-detalle"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL YOY -->
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <header class="modal-header">
+        <h2 id="modal-title">Detalle</h2>
+        <button id="modal-close" class="modal-close">✕</button>
+      </header>
+      <p id="modal-sub" class="muted"></p>
+      <div class="table-card">
+        <table id="modal-table">
+          <thead>
+            <tr>
+              <th>Categoría / Almacén</th>
+              <th id="modal-year-prev" class="text-right">Año N-1</th>
+              <th id="modal-year-current" class="text-right">Año N</th>
+              <th class="text-right">Crecimiento %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DETALLE FACTURA/NOTA -->
+  <div id="modal-op-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <header class="modal-header">
+        <h2 id="modal-op-title">Detalle de factura / nota</h2>
+        <button id="modal-op-close" class="modal-close">✕</button>
+      </header>
+
+      <p id="modal-op-sub" class="muted"></p>
+
+      <div class="modal-toolbar">
+        <button id="modal-op-export-excel" class="btn">⬇ Exportar a Excel</button>
+        <button id="modal-op-export-pdf" class="btn">⬇ Exportar a PDF</button>
+        <button id="modal-op-ver-detalle" class="btn">🔍 Ver en Detalle</button>
+      </div>
+
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Descripción</th>
+              <th class="text-right">Cantidad</th>
+              <th class="text-right">Costo</th>
+              <th class="text-right">Precio s/IVA</th>
+              <th>Vendedor</th>
+            </tr>
+          </thead>
+          <tbody id="modal-op-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
