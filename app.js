@@ -10,7 +10,7 @@ const M2_POR_ALMACEN = {
   "Todas": 3225
 };
 
-// Mapeos de columnas
+// Mapeos de columnas (incluye posibles nombres de categoría)
 const RENAME_FACTURAS = {
   "No_fac": "Factura",
   "Falta_fac": "Fecha",
@@ -31,7 +31,14 @@ const RENAME_FACTURAS = {
   "Des_tial": "Marca",
   "Cto_ent": "Costo Ent.",
   "Nom_cte": "Cliente",
-  "Nom_age": "Vendedor"
+  "Nom_age": "Vendedor",
+
+  // posibles columnas de categoría legible
+  "Categoria": "Categoria",
+  "Clase": "Categoria",
+  "Clase_prod": "Categoria",
+  "Desc_clase": "Categoria",
+  "Des_clase": "Categoria"
 };
 
 const RENAME_NOTAS = {
@@ -53,23 +60,72 @@ const RENAME_NOTAS = {
   "Des_tial": "Marca",
   "Cto_ent": "Costo Entrada",
   "Nom_fac": "Cliente",
-  "Cte_fac": "ID Cliente"
+  "Cte_fac": "ID Cliente",
+
+  // posibles columnas de categoría legible
+  "Categoria": "Categoria",
+  "Clase": "Categoria",
+  "Clase_prod": "Categoria",
+  "Desc_clase": "Categoria",
+  "Des_clase": "Categoria"
 };
 
-const DETALLE_COLS = [
+// Columnas disponibles para el detalle
+const DETALLE_ALL_COLS = [
   "Año",
   "Fecha",
+  "Hora",
   "Almacen",
   "Factura/Nota",
   "Cliente",
   "Categoria",
+  "Producto",
   "Tipo factura",
   "Subtotal",
   "Costo",
+  "Descuento ($)",
+  "Descuento (%)",
   "Utilidad",
   "Margen %",
+  "Marca",
   "Vendedor"
 ];
+
+// Modos de vista de la tabla Detalle
+const DETALLE_VIEW_MODES = {
+  basic: ["Fecha", "Almacen", "Factura/Nota", "Cliente", "Subtotal"],
+  standard: ["Año", "Almacen", "Categoria", "Costo", "Subtotal", "Margen %", "Utilidad"],
+  analytic: [
+    "Año",
+    "Fecha",
+    "Almacen",
+    "Categoria",
+    "Producto",
+    "Tipo factura",
+    "Subtotal",
+    "Costo",
+    "Utilidad",
+    "Margen %"
+  ]
+};
+
+// Configuración rápida por defecto
+const CONFIG_DEFAULT = {
+  metricPrincipal: "ventas",       // ventas | utilidad | margen
+  tipoGraficaMensual: "bar",       // bar | line
+  modoTabla: "standard",           // basic | standard | analytic
+  soloMargenNegativo: false
+};
+
+let appConfig = { ...CONFIG_DEFAULT };
+
+// ==================== LOCALSTORAGE ====================
+
+const LS_KEY_CONFIG = "cedroDashboardConfigV1";
+const LS_KEY_DETALLE_COLS = "cedroDashboardDetalleColsV1";
+const LS_KEY_FILTROS = "cedroDashboardFiltrosV1";
+
+let savedFiltrosIniciales = null;
 
 // ==================== UTILIDADES ====================
 
@@ -155,30 +211,29 @@ function renameRow(row, normMap) {
   return out;
 }
 
-// ==================== ESTADO Y DOM ====================
+// ==================== ESTADO ====================
 
 let records = [];
+let lineasDetalle = [];
+
 let yearsDisponibles = [];
 let almacenesDisponibles = [];
 let categoriasDisponibles = [];
 
-let charts = {
-  mensual: null,
-  almacen: null,
-  sucursal: null,
-  creditoMix: null,
-  creditoMensual: null,
-  categorias: null,
-  vendedores: null,
-  clientes: null,
-  explorer: null
-};
+let charts = { mensual: null, almacen: null };
+
+let detalleVisibles = [...DETALLE_VIEW_MODES.standard];
 
 let detalleSort = { col: null, asc: true };
 let detalleFiltros = {};
 let detalleBusqueda = "";
 
-// DOM general
+// Estado de operación en modal
+let currentOperacionLineas = [];
+let currentOperacionMeta = null;
+
+// ==================== DOM ====================
+
 const fileInput = document.getElementById("file-input");
 const fileNameSpan = document.getElementById("file-name");
 const errorDiv = document.getElementById("error");
@@ -188,7 +243,11 @@ const filterStore = document.getElementById("filter-store");
 const filterType = document.getElementById("filter-type");
 const filterCategory = document.getElementById("filter-category");
 
-// KPIs resumen
+const configMetric = document.getElementById("config-metric");
+const configChartType = document.getElementById("config-chart-type");
+const configTableMode = document.getElementById("config-table-mode");
+const configNegativos = document.getElementById("config-negativos");
+
 const kpiVentas = document.getElementById("kpi-ventas");
 const kpiVentasSub = document.getElementById("kpi-ventas-sub");
 const kpiUtilidad = document.getElementById("kpi-utilidad");
@@ -199,23 +258,19 @@ const kpiM2Sub = document.getElementById("kpi-m2-sub");
 const kpiTrans = document.getElementById("kpi-trans");
 const kpiClientes = document.getElementById("kpi-clientes");
 
-// Tablas resumen
 const tablaTopClientes = document.getElementById("tabla-top-clientes");
 const tablaTopVendedores = document.getElementById("tabla-top-vendedores");
 
-// YoY
 const thYearPrev = document.getElementById("th-year-prev");
 const thYearCurrent = document.getElementById("th-year-current");
 const tablaYoYBody = document.getElementById("tabla-yoy");
 
-// Detalle
 const detalleHeaderRow = document.getElementById("detalle-header-row");
 const detalleFilterRow = document.getElementById("detalle-filter-row");
 const detalleTableBody = document.getElementById("tabla-detalle");
 const searchGlobalInput = document.getElementById("search-global");
-const btnExportDetalle = document.getElementById("btn-export-detalle");
+const detallePool = document.getElementById("detalle-cols-pool");
 
-// Modal
 const modalBackdrop = document.getElementById("modal-backdrop");
 const modalClose = document.getElementById("modal-close");
 const modalTitle = document.getElementById("modal-title");
@@ -224,119 +279,71 @@ const modalYearPrev = document.getElementById("modal-year-prev");
 const modalYearCurrent = document.getElementById("modal-year-current");
 const modalTableBody = document.querySelector("#modal-table tbody");
 
-// Análisis por sucursal
-const tablaSucursal = document.getElementById("tabla-sucursal");
+const modalOpBackdrop = document.getElementById("modal-op-backdrop");
+const modalOpClose = document.getElementById("modal-op-close");
+const modalOpTitle = document.getElementById("modal-op-title");
+const modalOpSub = document.getElementById("modal-op-sub");
+const modalOpBody = document.getElementById("modal-op-body");
 
-// Crédito vs contado
-const kpiContadoVentas = document.getElementById("kpi-contado-ventas");
-const kpiContadoMargen = document.getElementById("kpi-contado-margen");
-const kpiCreditoVentas = document.getElementById("kpi-credito-ventas");
-const kpiCreditoMargen = document.getElementById("kpi-credito-margen");
-const kpiCreditoPct = document.getElementById("kpi-credito-pct");
+const modalOpExportExcel = document.getElementById("modal-op-export-excel");
+const modalOpExportPdf = document.getElementById("modal-op-export-pdf");
+const modalOpVerDetalle = document.getElementById("modal-op-ver-detalle");
 
-// Categorías
-const tablaCategorias = document.getElementById("tabla-categorias");
+// ==================== LOCALSTORAGE LOAD ====================
 
-// Vendedores
-const tablaVendedoresDetalle = document.getElementById("tabla-vendedores-detalle");
+function saveConfigState() {
+  try {
+    localStorage.setItem(LS_KEY_CONFIG, JSON.stringify(appConfig));
 
-// Clientes
-const tablaClientesDetalle = document.getElementById("tabla-clientes-detalle");
-
-// EXPLORADOR DE GRÁFICOS – DOM
-const explorerDimSelect = document.getElementById("explorer-dimension");
-const explorerMetricSelect = document.getElementById("explorer-metric");
-const explorerTypeSelect = document.getElementById("explorer-type");
-const explorerTopSelect = document.getElementById("explorer-top");
-const explorerCanvas = document.getElementById("chart-explorer");
-const explorerViewNameInput = document.getElementById("explorer-view-name");
-const explorerSaveBtn = document.getElementById("explorer-save-view");
-const explorerViewsSelect = document.getElementById("explorer-saved-views");
-
-// localStorage key
-const EXPLORER_VIEWS_KEY = "cedro_dashboard_explorer_views";
-
-// ==================== EXPLORADOR – CONFIG ====================
-
-const EXPLORER_DIMENSIONS = {
-  anio: {
-    label: "Año",
-    keyFn: r => r.anio,
-    labelFn: k => String(k)
-  },
-  mes: {
-    label: "Mes",
-    keyFn: r => r.mes,
-    labelFn: k => {
-      const idx = parseInt(k, 10) - 1;
-      const nombres = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-      return nombres[idx] || `Mes ${k}`;
+    if (Array.isArray(detalleVisibles)) {
+      localStorage.setItem(LS_KEY_DETALLE_COLS, JSON.stringify(detalleVisibles));
     }
-  },
-  almacen: {
-    label: "Almacén",
-    keyFn: r => r.almacen || "(Sin almacén)",
-    labelFn: k => k
-  },
-  categoria: {
-    label: "Categoría",
-    keyFn: r => r.categoria || "(Sin categoría)",
-    labelFn: k => k
-  },
-  vendedor: {
-    label: "Vendedor",
-    keyFn: r => r.vendedor || "(Sin vendedor)",
-    labelFn: k => k
-  },
-  cliente: {
-    label: "Cliente",
-    keyFn: r => r.cliente || "(Sin cliente)",
-    labelFn: k => k
-  },
-  tipo: {
-    label: "Tipo de factura",
-    keyFn: r => r.tipoFactura,
-    labelFn: k => (k === "credito" ? "Crédito" : k === "contado" ? "Contado" : k)
+
+    const filtros = {
+      year: filterYear ? filterYear.value : "all",
+      store: filterStore ? filterStore.value : "all",
+      tipo: filterType ? filterType.value : "both",
+      categoria: filterCategory ? filterCategory.value : "all"
+    };
+    localStorage.setItem(LS_KEY_FILTROS, JSON.stringify(filtros));
+  } catch (e) {
+    console.warn("No se pudo guardar configuración:", e);
   }
-};
+}
 
-const EXPLORER_METRICS = {
-  ventas: {
-    label: "Ventas (Subtotal)",
-    type: "money",
-    calc: rows => sumField(rows, "subtotal")
-  },
-  utilidad: {
-    label: "Utilidad bruta",
-    type: "money",
-    calc: rows => sumField(rows.filter(r => r.incluirUtilidad), "utilidad")
-  },
-  margen: {
-    label: "Margen bruto %",
-    type: "percent",
-    calc: rows => {
-      const v = sumField(rows, "subtotal");
-      const u = sumField(rows.filter(r => r.incluirUtilidad), "utilidad");
-      return v > 0 ? u / v : 0;
+function loadConfigState() {
+  try {
+    const confStr = localStorage.getItem(LS_KEY_CONFIG);
+    if (confStr) {
+      const saved = JSON.parse(confStr);
+      appConfig = { ...CONFIG_DEFAULT, ...saved };
     }
-  },
-  operaciones: {
-    label: "Transacciones únicas",
-    type: "plain",
-    calc: rows => {
-      const set = new Set(rows.map(r => r.origen + "|" + r.folio));
-      return set.size;
+
+    const colsStr = localStorage.getItem(LS_KEY_DETALLE_COLS);
+    if (colsStr) {
+      const savedCols = JSON.parse(colsStr);
+      if (Array.isArray(savedCols) && savedCols.length) {
+        detalleVisibles = savedCols;
+      }
     }
-  },
-  clientes: {
-    label: "Clientes únicos",
-    type: "plain",
-    calc: rows => {
-      const set = new Set(rows.map(r => r.cliente || "").filter(x => x));
-      return set.size;
+
+    const filtStr = localStorage.getItem(LS_KEY_FILTROS);
+    if (filtStr) {
+      savedFiltrosIniciales = JSON.parse(filtStr);
     }
+  } catch (e) {
+    console.warn("No se pudo cargar configuración:", e);
   }
-};
+}
+
+// cargar configuración previa
+loadConfigState();
+
+// sincronizar controles visuales con appConfig
+if (configMetric) configMetric.value = appConfig.metricPrincipal;
+if (configChartType) configChartType.value = appConfig.tipoGraficaMensual;
+if (configTableMode) configTableMode.value = appConfig.modoTabla;
+if (configNegativos) configNegativos.checked = appConfig.soloMargenNegativo;
 
 // ==================== LECTURA DE ARCHIVO ====================
 
@@ -347,9 +354,10 @@ if (fileInput) {
 function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
-  fileNameSpan.textContent = file.name;
-  errorDiv.textContent = "";
+  if (fileNameSpan) fileNameSpan.textContent = file.name;
+  if (errorDiv) errorDiv.textContent = "";
   records = [];
+  lineasDetalle = [];
 
   const reader = new FileReader();
   reader.onload = function (evt) {
@@ -425,23 +433,46 @@ function handleFile(e) {
           .trim()
           .toUpperCase();
 
-        const categoria = (row["ID Categoria"] || "").toString().trim();
+        const categoria = (
+          row["Categoria"] ||
+          row["ID Categoria"] ||
+          ""
+        ).toString().trim();
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
         const folio = (row["Factura"] || "").toString().trim();
         const marca = (row["Marca"] || "").toString().trim();
+        const hora = (row["Hora"] || "").toString().trim();
+        const producto = (row["Articulo"] || "").toString().trim();
+        const cantidad = toNumber(row["Pz."] ?? row["Cant_surt"] ?? 0);
+
+        // líneas detalle por factura
+        lineasDetalle.push({
+          origen: "factura",
+          folio,
+          fecha,
+          hora,
+          cliente,
+          vendedor,
+          descripcion: producto,
+          cantidad,
+          costo: toNumber(row["Costo Ent."]),
+          precioSinIva: subtotal
+        });
 
         records.push({
           origen: "factura",
           anio,
           mes,
           fecha,
+          hora,
           almacen,
           categoria,
           cliente,
           vendedor,
           marca,
           folio,
+          producto,
           subtotal,
           costo,
           utilidad,
@@ -483,23 +514,45 @@ function handleFile(e) {
           .toString()
           .trim()
           .toUpperCase();
-        const categoria = (row["ID Clase"] || "").toString().trim();
+        const categoria = (
+          row["Categoria"] ||
+          row["ID Clase"] ||
+          ""
+        ).toString().trim();
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
         const folio = (row["Nota"] || "").toString().trim();
         const marca = (row["Marca"] || "").toString().trim();
+        const hora = (row["Hora"] || "").toString().trim();
+        const producto = (row["Articulo"] || "").toString().trim();
+        const cantidad = toNumber(row["Pz."] ?? row["Cant_surt"] ?? 0);
+
+        lineasDetalle.push({
+          origen: "nota",
+          folio,
+          fecha,
+          hora,
+          cliente,
+          vendedor,
+          descripcion: producto,
+          cantidad,
+          costo: toNumber(row["Costo Entrada"]),
+          precioSinIva: subtotal
+        });
 
         records.push({
           origen: "nota",
           anio,
           mes,
           fecha,
+          hora,
           almacen,
           categoria,
           cliente,
           vendedor,
           marca,
           folio,
+          producto,
           subtotal,
           costo,
           utilidad,
@@ -523,8 +576,9 @@ function handleFile(e) {
 
       poblarFiltros();
       initDetalleHeaders();
+      renderDetallePool();
       actualizarTodo();
-      initExplorer();
+      saveConfigState();
     } catch (err) {
       console.error(err);
       if (errorDiv) {
@@ -573,21 +627,37 @@ function poblarFiltros() {
   filterStore.disabled = false;
   filterType.disabled = false;
   filterCategory.disabled = false;
+
+  // aplicar filtros guardados
+  if (savedFiltrosIniciales) {
+    if (filterYear && savedFiltrosIniciales.year) {
+      filterYear.value = savedFiltrosIniciales.year;
+    }
+    if (filterStore && savedFiltrosIniciales.store) {
+      filterStore.value = savedFiltrosIniciales.store;
+    }
+    if (filterType && savedFiltrosIniciales.tipo) {
+      filterType.value = savedFiltrosIniciales.tipo;
+    }
+    if (filterCategory && savedFiltrosIniciales.categoria) {
+      filterCategory.value = savedFiltrosIniciales.categoria;
+    }
+  }
 }
 
 function getFiltros() {
   return {
-    year: filterYear && filterYear.value === "all"
-      ? null
-      : filterYear
-      ? parseInt(filterYear.value, 10)
-      : null,
-    store: filterStore && filterStore.value === "all" ? null : filterStore ? filterStore.value : null,
+    year:
+      filterYear && filterYear.value !== "all"
+        ? parseInt(filterYear.value, 10)
+        : null,
+    store:
+      filterStore && filterStore.value !== "all"
+        ? filterStore.value
+        : null,
     tipo: filterType ? filterType.value : "both",
     categoria:
-      filterCategory && filterCategory.value === "all"
-        ? null
-        : filterCategory
+      filterCategory && filterCategory.value !== "all"
         ? filterCategory.value
         : null
   };
@@ -605,22 +675,61 @@ function filtrarRecords(ignorarYear) {
   });
 }
 
-// versión para sucursal (ignora almacén)
-function filtrarRecordsSinAlmacen() {
-  const f = getFiltros();
-  return records.filter(r => {
-    if (f.year && r.anio !== f.year) return false;
-    if (f.categoria && r.categoria !== f.categoria) return false;
-    if (f.tipo === "contado" && r.tipoFactura !== "contado") return false;
-    if (f.tipo === "credito" && r.tipoFactura !== "credito") return false;
-    return true;
+// listeners filtros
+if (filterYear) filterYear.addEventListener("change", () => {
+  actualizarTodo();
+  saveConfigState();
+});
+if (filterStore) filterStore.addEventListener("change", () => {
+  actualizarTodo();
+  saveConfigState();
+});
+if (filterType) filterType.addEventListener("change", () => {
+  actualizarTodo();
+  saveConfigState();
+});
+if (filterCategory) filterCategory.addEventListener("change", () => {
+  actualizarTodo();
+  saveConfigState();
+});
+
+// ==================== CONFIG RÁPIDA LISTENERS ====================
+
+if (configMetric) {
+  configMetric.addEventListener("change", () => {
+    appConfig.metricPrincipal = configMetric.value;
+    actualizarTodo();
+    saveConfigState();
   });
 }
 
-if (filterYear) filterYear.addEventListener("change", actualizarTodo);
-if (filterStore) filterStore.addEventListener("change", actualizarTodo);
-if (filterType) filterType.addEventListener("change", actualizarTodo);
-if (filterCategory) filterCategory.addEventListener("change", actualizarTodo);
+if (configChartType) {
+  configChartType.addEventListener("change", () => {
+    appConfig.tipoGraficaMensual = configChartType.value;
+    actualizarTodo();
+    saveConfigState();
+  });
+}
+
+if (configTableMode) {
+  configTableMode.addEventListener("change", () => {
+    appConfig.modoTabla = configTableMode.value;
+    if (DETALLE_VIEW_MODES[appConfig.modoTabla]) {
+      detalleVisibles = [...DETALLE_VIEW_MODES[appConfig.modoTabla]];
+      initDetalleHeaders();
+      renderDetalle();
+      saveConfigState();
+    }
+  });
+}
+
+if (configNegativos) {
+  configNegativos.addEventListener("change", () => {
+    appConfig.soloMargenNegativo = configNegativos.checked;
+    renderDetalle();
+    saveConfigState();
+  });
+}
 
 // ==================== KPIs / GRÁFICAS / TOP ====================
 
@@ -632,12 +741,6 @@ function actualizarTodo() {
   actualizarTop(datos);
   actualizarYoY();
   renderDetalle();
-  actualizarAnalisisSucursales();
-  actualizarAnalisisCredito(datos);
-  actualizarAnalisisCategorias(datos);
-  actualizarAnalisisVendedores(datos);
-  actualizarAnalisisClientes(datos);
-  renderExplorerChart();
 }
 
 function actualizarKpis(data) {
@@ -691,49 +794,55 @@ function actualizarGraficas(data) {
   }
 
   const ventasMes = new Array(12).fill(0);
+  const utilMes = new Array(12).fill(0);
+
   base.forEach(r => {
     const idx = r.mes - 1;
-    if (idx >= 0 && idx < 12) ventasMes[idx] += r.subtotal;
+    if (idx < 0 || idx > 11) return;
+    ventasMes[idx] += r.subtotal;
+    if (r.incluirUtilidad) utilMes[idx] += r.utilidad;
   });
+
+  const margenMes = ventasMes.map((v, i) => (v > 0 ? utilMes[i] / v : 0));
   const labelsMes = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  let dataMensual, labelMensual;
+  switch (appConfig.metricPrincipal) {
+    case "utilidad":
+      dataMensual = utilMes;
+      labelMensual = "Utilidad bruta";
+      break;
+    case "margen":
+      dataMensual = margenMes.map(x => x * 100);
+      labelMensual = "Margen bruto %";
+      break;
+    default:
+      dataMensual = ventasMes;
+      labelMensual = "Ventas (Subtotal)";
+  }
+
+  const tipoGrafica = appConfig.tipoGraficaMensual === "line" ? "line" : "bar";
 
   if (charts.mensual) charts.mensual.destroy();
   charts.mensual = new Chart(ctxMensual, {
-    type: "bar",
+    type: tipoGrafica,
     data: {
       labels: labelsMes,
-      datasets: [{ label: "Ventas", data: ventasMes }]
+      datasets: [{ label: labelMensual, data: dataMensual }]
     },
     options: {
       responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            title: items => `Mes: ${items[0].label}`,
-            label: item => {
-              const valor = item.parsed.y || 0;
-              const total = ventasMes.reduce((a, b) => a + b, 0);
-              const pct = total > 0 ? (valor / total) * 100 : 0;
-              return [
-                `Ventas: ${formatCurrency(valor)}`,
-                `Participación: ${pct.toFixed(1)}%`
-              ];
-            }
+      scales: {
+        y: {
+          ticks: {
+            callback: v => v.toLocaleString("es-MX")
           }
         }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const mes = idx + 1;
-        abrirDetalleMensual(mes);
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
       }
     }
   });
 
+  // GRÁFICA POR ALMACÉN
   const porAlm = {};
   data.forEach(r => {
     const a = r.almacen || "(sin)";
@@ -760,30 +869,6 @@ function actualizarGraficas(data) {
     },
     options: {
       responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            title: items => `Almacén: ${items[0].label}`,
-            label: item => {
-              const datasetLabel = item.dataset.label || "";
-              const valor = item.parsed.y || 0;
-              if (datasetLabel.includes("m²")) {
-                return `${datasetLabel}: ${formatCurrency(valor)}/m²`;
-              }
-              return `${datasetLabel}: ${formatCurrency(valor)}`;
-            }
-          }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const almacenSeleccionado = labsAlm[idx];
-        if (filterStore) {
-          filterStore.value = almacenSeleccionado;
-          actualizarTodo();
-        }
-      },
       scales: {
         y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
       }
@@ -813,7 +898,14 @@ function actualizarTop(data) {
       utilidad: d.util,
       margen: d.n ? d.mAcum / d.n : 0
     }))
-    .sort((a, b) => b.ventas - a.ventas)
+    .sort((a, b) => {
+      if (appConfig.metricPrincipal === "utilidad") {
+        return b.utilidad - a.utilidad;
+      } else if (appConfig.metricPrincipal === "margen") {
+        return b.margen - a.margen;
+      }
+      return b.ventas - a.ventas;
+    })
     .slice(0, 5);
 
   tablaTopClientes.innerHTML = "";
@@ -844,13 +936,24 @@ function actualizarTop(data) {
   });
 
   const listaV = Object.entries(vend)
-    .map(([nombre, d]) => ({
-      nombre,
-      ventas: d.ventas,
-      utilidad: d.util,
-      ops: (opsPorVend[nombre] || new Set()).size
-    }))
-    .sort((a, b) => b.ventas - a.ventas)
+    .map(([nombre, d]) => {
+      const margen = d.ventas > 0 ? d.util / d.ventas : 0;
+      return {
+        nombre,
+        ventas: d.ventas,
+        utilidad: d.util,
+        margen,
+        ops: (opsPorVend[nombre] || new Set()).size
+      };
+    })
+    .sort((a, b) => {
+      if (appConfig.metricPrincipal === "utilidad") {
+        return b.utilidad - a.utilidad;
+      } else if (appConfig.metricPrincipal === "margen") {
+        return b.margen - a.margen;
+      }
+      return b.ventas - a.ventas;
+    })
     .slice(0, 5);
 
   tablaTopVendedores.innerHTML = "";
@@ -1049,16 +1152,6 @@ function abrirDetalleMetrica(metricId, yPrev, yCur) {
       });
     }
 
-    const thead = document.querySelector("#modal-table thead tr");
-    if (thead) {
-      thead.innerHTML = `
-        <th>Almacén</th>
-        <th class="text-right">m²</th>
-        <th class="text-right">m²</th>
-        <th class="text-right">Crecimiento %</th>
-      `;
-    }
-
     filas.forEach(f => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -1084,16 +1177,6 @@ function abrirDetalleMetrica(metricId, yPrev, yCur) {
     const aCur = dataCur.filter(r => (r.categoria || "(Sin categoría)") === cat);
     return { cat, prev: calc(aPrev), cur: calc(aCur) };
   });
-
-  const thead = document.querySelector("#modal-table thead tr");
-  if (thead) {
-    thead.innerHTML = `
-      <th>Categoría</th>
-      <th id="modal-year-prev" class="text-right">${yPrev}</th>
-      <th id="modal-year-current" class="text-right">${yCur}</th>
-      <th class="text-right">Crecimiento %</th>
-    `;
-  }
 
   modalTableBody.innerHTML = "";
   filas
@@ -1121,89 +1204,10 @@ function abrirDetalleMetrica(metricId, yPrev, yCur) {
         <td class="text-right">${fmt(f.cur)}</td>
         <td class="text-right"><span class="${cls}">${icon} ${crecStr}</span></td>
       `;
-
-      if (metricId !== "m2") {
-        tr.style.cursor = "pointer";
-        tr.addEventListener("click", () => irADetalleConCategoria(f.cat));
-      }
-
       modalTableBody.appendChild(tr);
     });
 
   modalBackdrop.classList.add("active");
-}
-
-function abrirDetalleMensual(mesSeleccionado) {
-  if (!modalBackdrop || !modalTitle || !modalSub || !modalTableBody) return;
-
-  const filtros = getFiltros();
-
-  let yearBase = filtros.year;
-  if (!yearBase) {
-    yearBase = Math.max(...yearsDisponibles);
-  }
-
-  const datos = filtrarRecords(false).filter(r => {
-    return r.anio === yearBase && r.mes === mesSeleccionado;
-  });
-
-  const mesNombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][mesSeleccionado - 1];
-
-  modalTitle.textContent = `Detalle del mes: ${mesNombre} ${yearBase}`;
-  modalSub.textContent = `Filtros: almacén=${filtros.store || "Todos"}, tipo=${filtros.tipo}, categoría=${filtros.categoria || "Todas"}`;
-
-  const porCat = {};
-  datos.forEach(r => {
-    const cat = r.categoria || "(Sin categoría)";
-    if (!porCat[cat]) {
-      porCat[cat] = { ventas: 0, utilidad: 0 };
-    }
-    porCat[cat].ventas += r.subtotal;
-    if (r.incluirUtilidad) {
-      porCat[cat].utilidad += r.utilidad;
-    }
-  });
-
-  const filas = Object.entries(porCat).map(([cat, d]) => {
-    const margen = d.ventas > 0 ? d.utilidad / d.ventas : 0;
-    return { cat, ventas: d.ventas, utilidad: d.utilidad, margen };
-  }).sort((a, b) => b.ventas - a.ventas);
-
-  const thead = document.querySelector("#modal-table thead tr");
-  if (thead) {
-    thead.innerHTML = `
-      <th>Categoría</th>
-      <th class="text-right">Ventas</th>
-      <th class="text-right">Utilidad</th>
-      <th class="text-right">Margen %</th>
-    `;
-  }
-
-  modalTableBody.innerHTML = "";
-  filas.forEach(f => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${f.cat}</td>
-      <td class="text-right">${formatCurrency(f.ventas)}</td>
-      <td class="text-right">${formatCurrency(f.utilidad)}</td>
-      <td class="text-right">${formatPercent(f.margen)}</td>
-    `;
-    tr.style.cursor = "pointer";
-    tr.addEventListener("click", () => irADetalleConCategoria(f.cat));
-    modalTableBody.appendChild(tr);
-  });
-
-  modalBackdrop.classList.add("active");
-}
-
-function irADetalleConCategoria(cat) {
-  if (!cat || cat === "(Sin categoría)") return;
-  if (filterCategory) {
-    filterCategory.value = cat;
-  }
-  if (modalBackdrop) modalBackdrop.classList.remove("active");
-  activarTab("tab-detalle");
-  actualizarTodo();
 }
 
 if (modalClose && modalBackdrop) {
@@ -1215,7 +1219,55 @@ if (modalClose && modalBackdrop) {
   });
 }
 
-// ==================== DETALLE ====================
+// ==================== DETALLE – COLUMNAS DINÁMICAS ====================
+
+function renderDetallePool() {
+  if (!detallePool) return;
+  detallePool.innerHTML = "";
+
+  DETALLE_ALL_COLS.forEach(col => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = col;
+    chip.draggable = true;
+
+    chip.addEventListener("dragstart", e => {
+      chip.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "copyMove";
+      e.dataTransfer.setData("text/plain", col);
+    });
+
+    chip.addEventListener("dragend", () => {
+      chip.classList.remove("dragging");
+    });
+
+    detallePool.appendChild(chip);
+  });
+}
+
+function handleDropOnHeader(e) {
+  e.preventDefault();
+  const newCol = e.dataTransfer.getData("text/plain");
+  const idx = parseInt(e.currentTarget.dataset.colIndex, 10);
+  e.currentTarget.classList.remove("drag-over");
+  if (!newCol || isNaN(idx)) return;
+
+  const current = [...detalleVisibles];
+  const existingIdx = current.indexOf(newCol);
+  if (existingIdx !== -1) {
+    const tmp = current[idx];
+    current[idx] = newCol;
+    current[existingIdx] = tmp;
+  } else {
+    current[idx] = newCol;
+  }
+
+  detalleVisibles = current;
+  initDetalleHeaders();
+  renderDetalle();
+  saveConfigState();
+}
 
 function initDetalleHeaders() {
   if (!detalleHeaderRow || !detalleFilterRow) return;
@@ -1224,11 +1276,32 @@ function initDetalleHeaders() {
   detalleFilterRow.innerHTML = "";
   detalleFiltros = {};
 
-  DETALLE_COLS.forEach(col => {
+  detalleVisibles.forEach((col, idx) => {
     const th = document.createElement("th");
-    th.textContent = col;
-    th.classList.add("sortable");
-    th.addEventListener("click", () => sortDetalle(col));
+    th.classList.add("sortable", "th-drop-target");
+    th.dataset.col = col;
+    th.dataset.colIndex = idx;
+
+    const label = document.createElement("div");
+    label.className = "th-label";
+    label.innerHTML = `${col} <span class="helper">⇧⇩</span>`;
+    th.appendChild(label);
+
+    th.addEventListener("click", e => {
+      if (e.detail === 0) return;
+      sortDetalle(col);
+    });
+
+    th.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      th.classList.add("drag-over");
+    });
+    th.addEventListener("dragleave", () => {
+      th.classList.remove("drag-over");
+    });
+    th.addEventListener("drop", handleDropOnHeader);
+
     detalleHeaderRow.appendChild(th);
 
     const thF = document.createElement("th");
@@ -1256,10 +1329,6 @@ function initDetalleHeaders() {
       }, 200)
     );
   }
-
-  if (btnExportDetalle) {
-    btnExportDetalle.addEventListener("click", exportDetalleToExcel);
-  }
 }
 
 function getValorDetalle(r, col) {
@@ -1267,7 +1336,9 @@ function getValorDetalle(r, col) {
     case "Año":
       return r.anio;
     case "Fecha":
-      return r.fecha.toISOString().slice(0, 10);
+      return r.fecha ? r.fecha.toISOString().slice(0, 10) : "";
+    case "Hora":
+      return r.hora || "";
     case "Almacen":
       return r.almacen;
     case "Factura/Nota":
@@ -1276,16 +1347,24 @@ function getValorDetalle(r, col) {
       return r.cliente;
     case "Categoria":
       return r.categoria;
+    case "Producto":
+      return r.producto;
     case "Tipo factura":
       return r.tipoFactura === "credito" ? "Crédito" : "Contado";
     case "Subtotal":
       return r.subtotal;
     case "Costo":
       return r.costo;
+    case "Descuento ($)":
+      return r.descuentoMonto;
+    case "Descuento (%)":
+      return r.descuentoPct / 100;
     case "Utilidad":
       return r.utilidad;
     case "Margen %":
       return r.subtotal > 0 ? r.utilidad / r.subtotal : 0;
+    case "Marca":
+      return r.marca;
     case "Vendedor":
       return r.vendedor;
     default:
@@ -1307,6 +1386,11 @@ function renderDetalle() {
 
   const base = filtrarRecords(false);
   let arr = base.slice();
+
+  // solo márgenes negativos
+  if (appConfig.soloMargenNegativo) {
+    arr = arr.filter(r => r.subtotal > 0 && r.utilidad < 0);
+  }
 
   // filtros por columna
   arr = arr.filter(r => {
@@ -1331,7 +1415,8 @@ function renderDetalle() {
         r.vendedor,
         r.folio,
         r.almacen,
-        r.categoria
+        r.categoria,
+        r.producto
       ];
       return campos.some(
         c => c && c.toString().toLowerCase().includes(detalleBusqueda)
@@ -1358,860 +1443,244 @@ function renderDetalle() {
   detalleTableBody.innerHTML = "";
   arr.forEach(r => {
     const tr = document.createElement("tr");
-    DETALLE_COLS.forEach(col => {
+
+    detalleVisibles.forEach(col => {
       const td = document.createElement("td");
       let v = getValorDetalle(r, col);
-      if (col === "Subtotal" || col === "Costo" || col === "Utilidad") {
+
+      if (["Subtotal", "Costo", "Utilidad", "Descuento ($)"].includes(col)) {
         td.classList.add("text-right");
         const num = toNumber(v);
         td.textContent = formatCurrency(num);
         if (num < 0) td.classList.add("neg");
-      } else if (col === "Margen %") {
+      } else if (col === "Margen %" || col === "Descuento (%)") {
         td.classList.add("text-right");
-        td.textContent = formatPercent(v);
-        if (v < 0) td.classList.add("neg");
+        const num = typeof v === "number" ? v : toNumber(v);
+        td.textContent = formatPercent(num);
+        if (num < 0) td.classList.add("neg");
       } else {
         td.textContent = v || "";
       }
+
       tr.appendChild(td);
     });
+
+    tr.addEventListener("click", () => {
+      abrirDetalleOperacion(r.origen, r.folio);
+    });
+
     detalleTableBody.appendChild(tr);
   });
 }
 
-// ==================== ANÁLISIS POR SUCURSAL ====================
+// ==================== MODAL DETALLE OPERACIÓN ====================
 
-function actualizarAnalisisSucursales() {
-  const data = filtrarRecordsSinAlmacen();
-  if (!data.length || !tablaSucursal) return;
+function abrirDetalleOperacion(origen, folio) {
+  if (!modalOpBackdrop || !modalOpBody || !modalOpTitle || !modalOpSub) return;
+  if (!folio) return;
 
-  const porAlm = {};
-  data.forEach(r => {
-    const a = r.almacen || "(Sin almacén)";
-    if (!porAlm[a]) {
-      porAlm[a] = {
-        ventas: 0,
-        utilidad: 0,
-        nUtil: 0,
-        ops: new Set(),
-        clientes: new Set()
-      };
-    }
-    porAlm[a].ventas += r.subtotal;
-    if (r.incluirUtilidad) {
-      porAlm[a].utilidad += r.utilidad;
-      porAlm[a].nUtil++;
-    }
-    porAlm[a].ops.add(r.origen + "|" + r.folio);
-    if (r.cliente) porAlm[a].clientes.add(r.cliente);
-  });
+  const lineas = lineasDetalle.filter(
+    l => l.origen === origen && l.folio === folio
+  );
+  if (!lineas.length) return;
 
-  const filas = Object.entries(porAlm).map(([alm, d]) => {
-    const margen = d.ventas > 0 ? d.utilidad / d.ventas : 0;
-    const m2 = M2_POR_ALMACEN[alm] || 0;
-    const vM2 = m2 > 0 ? d.ventas / m2 : 0;
-    return {
-      almacén: alm,
-      ventas: d.ventas,
-      utilidad: d.utilidad,
-      margen,
-      ventasM2: vM2,
-      trans: d.ops.size,
-      clientes: d.clientes.size
-    };
-  }).sort((a, b) => b.ventas - a.ventas);
+  currentOperacionLineas = lineas;
+  currentOperacionMeta = { origen, folio };
 
-  tablaSucursal.innerHTML = "";
-  filas.forEach(f => {
+  const cab = lineas[0];
+
+  const tipoTxt = origen === "factura" ? "Factura" : "Nota";
+  const fechaStr = cab.fecha instanceof Date
+    ? cab.fecha.toISOString().slice(0, 10)
+    : "";
+
+  modalOpTitle.textContent = `${tipoTxt} ${folio}`;
+  modalOpSub.textContent =
+    `Fecha: ${fechaStr} ${cab.hora || ""} · ` +
+    `Cliente: ${cab.cliente || "(sin cliente)"} · ` +
+    `Vendedor: ${cab.vendedor || "(sin vendedor)"}`;
+
+  modalOpBody.innerHTML = "";
+  lineas.forEach(l => {
+    const fechaL = l.fecha instanceof Date
+      ? l.fecha.toISOString().slice(0, 10)
+      : "";
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${f.almacén}</td>
-      <td class="text-right">${formatCurrency(f.ventas)}</td>
-      <td class="text-right">${formatCurrency(f.utilidad)}</td>
-      <td class="text-right">${formatPercent(f.margen)}</td>
-      <td class="text-right">${formatCurrency(f.ventasM2)}/m²</td>
-      <td class="text-right">${f.trans.toLocaleString("es-MX")}</td>
-      <td class="text-right">${f.clientes.toLocaleString("es-MX")}</td>
+      <td>${fechaL}</td>
+      <td>${l.hora || ""}</td>
+      <td>${l.cliente || ""}</td>
+      <td>${l.descripcion || ""}</td>
+      <td class="text-right">${toNumber(l.cantidad).toLocaleString("es-MX")}</td>
+      <td class="text-right">${formatCurrency(toNumber(l.costo))}</td>
+      <td class="text-right">${formatCurrency(toNumber(l.precioSinIva))}</td>
+      <td>${l.vendedor || ""}</td>
     `;
-    tr.style.cursor = "pointer";
-    tr.addEventListener("click", () => {
-      if (filterStore) {
-        filterStore.value = f.almacén;
-        activarTab("tab-detalle");
-        actualizarTodo();
-      }
-    });
-    tablaSucursal.appendChild(tr);
+    modalOpBody.appendChild(tr);
   });
 
-  const canvas = document.getElementById("chart-sucursal");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-
-  const labels = filas.map(f => f.almacén);
-  const datosVentas = filas.map(f => f.ventas);
-  const datosVentasM2 = filas.map(f => f.ventasM2);
-
-  if (charts.sucursal) charts.sucursal.destroy();
-  charts.sucursal = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        { label: "Ventas", data: datosVentas },
-        { label: "Ventas por m²", data: datosVentasM2 }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => {
-              const label = item.dataset.label;
-              const v = item.parsed.y || 0;
-              if (label.includes("m²")) {
-                return `${label}: ${formatCurrency(v)}/m²`;
-              }
-              return `${label}: ${formatCurrency(v)}`;
-            }
-          }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const alm = labels[idx];
-        if (filterStore) {
-          filterStore.value = alm;
-          activarTab("tab-resumen");
-          actualizarTodo();
-        }
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
-      }
-    }
-  });
+  modalOpBackdrop.classList.add("active");
 }
 
-// ==================== CRÉDITO VS CONTADO ====================
-
-function actualizarAnalisisCredito(data) {
-  if (!data.length) return;
-
-  const cont = data.filter(r => r.tipoFactura === "contado");
-  const cred = data.filter(r => r.tipoFactura === "credito");
-
-  const vCont = sumField(cont, "subtotal");
-  const vCred = sumField(cred, "subtotal");
-  const vTot = vCont + vCred;
-
-  const uCont = sumField(cont.filter(r => r.incluirUtilidad), "utilidad");
-  const uCred = sumField(cred.filter(r => r.incluirUtilidad), "utilidad");
-
-  const mCont = vCont > 0 ? uCont / vCont : 0;
-  const mCred = vCred > 0 ? uCred / vCred : 0;
-  const pctCred = vTot > 0 ? vCred / vTot : 0;
-
-  if (kpiContadoVentas) kpiContadoVentas.textContent = formatCurrency(vCont);
-  if (kpiContadoMargen) kpiContadoMargen.textContent = `Margen: ${formatPercent(mCont)}`;
-  if (kpiCreditoVentas) kpiCreditoVentas.textContent = formatCurrency(vCred);
-  if (kpiCreditoMargen) kpiCreditoMargen.textContent = `Margen: ${formatPercent(mCred)}`;
-  if (kpiCreditoPct) kpiCreditoPct.textContent = formatPercent(pctCred);
-
-  const canvasMix = document.getElementById("chart-credito-mix");
-  const canvasMensual = document.getElementById("chart-credito-mensual");
-  if (!canvasMix || !canvasMensual) return;
-
-  const ctxMix = canvasMix.getContext("2d");
-  const ctxMensual = canvasMensual.getContext("2d");
-
-  if (charts.creditoMix) charts.creditoMix.destroy();
-  charts.creditoMix = new Chart(ctxMix, {
-    type: "doughnut",
-    data: {
-      labels: ["Contado", "Crédito"],
-      datasets: [{
-        data: [vCont, vCred]
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => {
-              const v = item.parsed || 0;
-              const pct = vTot > 0 ? (v / vTot) * 100 : 0;
-              return `${item.label}: ${formatCurrency(v)} (${pct.toFixed(1)}%)`;
-            }
-          }
-        }
-      }
-    }
-  });
-
-  const labelsMes = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-  const contMes = new Array(12).fill(0);
-  const credMes = new Array(12).fill(0);
-
-  cont.forEach(r => {
-    const i = r.mes - 1;
-    if (i >= 0 && i < 12) contMes[i] += r.subtotal;
-  });
-  cred.forEach(r => {
-    const i = r.mes - 1;
-    if (i >= 0 && i < 12) credMes[i] += r.subtotal;
-  });
-
-  if (charts.creditoMensual) charts.creditoMensual.destroy();
-  charts.creditoMensual = new Chart(ctxMensual, {
-    type: "line",
-    data: {
-      labels: labelsMes,
-      datasets: [
-        { label: "Contado", data: contMes },
-        { label: "Crédito", data: credMes }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => `${item.dataset.label}: ${formatCurrency(item.parsed.y || 0)}`
-          }
-        }
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
-      }
-    }
-  });
-}
-
-// ==================== CATEGORÍAS ====================
-
-function actualizarAnalisisCategorias(data) {
-  if (!data.length || !tablaCategorias) return;
-
-  const porCat = {};
-  data.forEach(r => {
-    const c = r.categoria || "(Sin categoría)";
-    if (!porCat[c]) porCat[c] = { ventas: 0, utilidad: 0 };
-    porCat[c].ventas += r.subtotal;
-    if (r.incluirUtilidad) porCat[c].utilidad += r.utilidad;
-  });
-
-  const totalVentas = Object.values(porCat).reduce((acc, d) => acc + d.ventas, 0);
-
-  const filas = Object.entries(porCat).map(([cat, d]) => {
-    const margen = d.ventas > 0 ? d.utilidad / d.ventas : 0;
-    const pct = totalVentas > 0 ? d.ventas / totalVentas : 0;
-    return { cat, ventas: d.ventas, utilidad: d.utilidad, margen, pct };
-  }).sort((a, b) => b.ventas - a.ventas);
-
-  tablaCategorias.innerHTML = "";
-  filas.forEach(f => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${f.cat}</td>
-      <td class="text-right">${formatCurrency(f.ventas)}</td>
-      <td class="text-right">${formatCurrency(f.utilidad)}</td>
-      <td class="text-right">${formatPercent(f.margen)}</td>
-      <td class="text-right">${formatPercent(f.pct)}</td>
-    `;
-    tr.style.cursor = "pointer";
-    tr.addEventListener("click", () => irADetalleConCategoria(f.cat));
-    tablaCategorias.appendChild(tr);
-  });
-
-  const canvas = document.getElementById("chart-categorias");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-
-  const topN = filas.slice(0, 10);
-  const labels = topN.map(f => f.cat);
-  const dataVentas = topN.map(f => f.ventas);
-
-  if (charts.categorias) charts.categorias.destroy();
-  charts.categorias = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{ label: "Ventas", data: dataVentas }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => `Ventas: ${formatCurrency(item.parsed.y || 0)}`
-          }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const cat = labels[idx];
-        irADetalleConCategoria(cat);
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
-      }
-    }
-  });
-}
-
-// ==================== VENDEDORES ====================
-
-function actualizarAnalisisVendedores(data) {
-  if (!data.length || !tablaVendedoresDetalle) return;
-
-  const vend = {};
-  const opsPorVend = {};
-  data.forEach(r => {
-    const v = r.vendedor || "(Sin vendedor)";
-    if (!vend[v]) vend[v] = { ventas: 0, utilidad: 0 };
-    vend[v].ventas += r.subtotal;
-    if (r.incluirUtilidad) vend[v].utilidad += r.utilidad;
-
-    const key = r.origen + "|" + r.folio;
-    if (!opsPorVend[v]) opsPorVend[v] = new Set();
-    opsPorVend[v].add(key);
-  });
-
-  const filas = Object.entries(vend).map(([nombre, d]) => {
-    const ops = opsPorVend[nombre] ? opsPorVend[nombre].size : 0;
-    const margen = d.ventas > 0 ? d.utilidad / d.ventas : 0;
-    return { nombre, ventas: d.ventas, utilidad: d.utilidad, margen, ops };
-  }).sort((a, b) => b.ventas - a.ventas);
-
-  tablaVendedoresDetalle.innerHTML = "";
-  filas.forEach(f => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${f.nombre}</td>
-      <td class="text-right">${formatCurrency(f.ventas)}</td>
-      <td class="text-right">${formatCurrency(f.utilidad)}</td>
-      <td class="text-right">${formatPercent(f.margen)}</td>
-      <td class="text-right">${f.ops.toLocaleString("es-MX")}</td>
-    `;
-    tr.style.cursor = "pointer";
-    tr.addEventListener("click", () => {
-      // filtrar detalle por vendedor
-      detalleFiltros["Vendedor"] = (f.nombre || "").toLowerCase();
-      if (searchGlobalInput) searchGlobalInput.value = "";
-      activarTab("tab-detalle");
-      renderDetalle();
-    });
-    tablaVendedoresDetalle.appendChild(tr);
-  });
-
-  const canvas = document.getElementById("chart-vendedores");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-
-  const topN = filas.slice(0, 10);
-  const labels = topN.map(f => f.nombre);
-  const dataVentas = topN.map(f => f.ventas);
-
-  if (charts.vendedores) charts.vendedores.destroy();
-  charts.vendedores = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{ label: "Ventas", data: dataVentas }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => `Ventas: ${formatCurrency(item.parsed.y || 0)}`
-          }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const nombre = labels[idx];
-        detalleFiltros["Vendedor"] = (nombre || "").toLowerCase();
-        activarTab("tab-detalle");
-        renderDetalle();
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
-      }
-    }
-  });
-}
-
-// ==================== CLIENTES ====================
-
-function actualizarAnalisisClientes(data) {
-  if (!data.length || !tablaClientesDetalle) return;
-
-  const clientes = {};
-  const opsPorCliente = {};
-  data.forEach(r => {
-    const c = r.cliente || "(Sin cliente)";
-    if (!clientes[c]) clientes[c] = { ventas: 0, utilidad: 0 };
-    clientes[c].ventas += r.subtotal;
-    if (r.incluirUtilidad) clientes[c].utilidad += r.utilidad;
-
-    const key = r.origen + "|" + r.folio;
-    if (!opsPorCliente[c]) opsPorCliente[c] = new Set();
-    opsPorCliente[c].add(key);
-  });
-
-  const filas = Object.entries(clientes).map(([nombre, d]) => {
-    const ops = opsPorCliente[nombre] ? opsPorCliente[nombre].size : 0;
-    const margen = d.ventas > 0 ? d.utilidad / d.ventas : 0;
-    return { nombre, ventas: d.ventas, utilidad: d.utilidad, margen, ops };
-  }).sort((a, b) => b.ventas - a.ventas);
-
-  tablaClientesDetalle.innerHTML = "";
-  filas.forEach(f => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${f.nombre}</td>
-      <td class="text-right">${formatCurrency(f.ventas)}</td>
-      <td class="text-right">${formatCurrency(f.utilidad)}</td>
-      <td class="text-right">${formatPercent(f.margen)}</td>
-      <td class="text-right">${f.ops.toLocaleString("es-MX")}</td>
-    `;
-    tr.style.cursor = "pointer";
-    tr.addEventListener("click", () => {
-      detalleFiltros["Cliente"] = (f.nombre || "").toLowerCase();
-      activarTab("tab-detalle");
-      renderDetalle();
-    });
-    tablaClientesDetalle.appendChild(tr);
-  });
-
-  const canvas = document.getElementById("chart-clientes");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-
-  const topN = filas.slice(0, 10);
-  const labels = topN.map(f => f.nombre);
-  const dataVentas = topN.map(f => f.ventas);
-
-  if (charts.clientes) charts.clientes.destroy();
-  charts.clientes = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{ label: "Ventas", data: dataVentas }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => `Ventas: ${formatCurrency(item.parsed.y || 0)}`
-          }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const nombre = labels[idx];
-        detalleFiltros["Cliente"] = (nombre || "").toLowerCase();
-        activarTab("tab-detalle");
-        renderDetalle();
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
-      }
-    }
-  });
-}
-
-// ==================== EXPLORADOR – LÓGICA ====================
-
-function renderExplorerChart() {
-  if (!explorerCanvas || !explorerDimSelect || !explorerMetricSelect || !explorerTypeSelect || !explorerTopSelect) return;
-  if (!records.length) return;
-
-  const dimKey = explorerDimSelect.value;
-  const metKey = explorerMetricSelect.value;
-  const chartType = explorerTypeSelect.value;
-  const topN = parseInt(explorerTopSelect.value, 10) || 0;
-
-  const dimCfg = EXPLORER_DIMENSIONS[dimKey];
-  const metCfg = EXPLORER_METRICS[metKey];
-  if (!dimCfg || !metCfg) return;
-
-  const datos = filtrarRecords(false);
-  const grupos = {};
-
-  datos.forEach(r => {
-    let k = dimCfg.keyFn(r);
-    if (k === undefined || k === null || k === "") k = "(Sin valor)";
-    if (!grupos[k]) grupos[k] = [];
-    grupos[k].push(r);
-  });
-
-  const entries = Object.entries(grupos).map(([k, rows]) => ({
-    key: k,
-    label: dimCfg.labelFn ? dimCfg.labelFn(k) : k,
-    value: metCfg.calc(rows)
-  }));
-
-  entries.sort((a, b) => b.value - a.value);
-  let recs = entries;
-  if (topN > 0 && entries.length > topN) {
-    recs = entries.slice(0, topN);
-  }
-
-  const labels = recs.map(e => e.label);
-  const data = recs.map(e => e.value);
-
-  if (charts.explorer) charts.explorer.destroy();
-  const ctx = explorerCanvas.getContext("2d");
-
-  const baseType = chartType === "bar-horizontal" ? "bar" : chartType;
-
-  charts.explorer = new Chart(ctx, {
-    type: baseType,
-    data: {
-      labels,
-      datasets: [
-        {
-          label: metCfg.label,
-          data
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      indexAxis: chartType === "bar-horizontal" ? "y" : "x",
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: item => {
-              const v = item.parsed.y ?? item.parsed;
-              if (metCfg.type === "money") return `${metCfg.label}: ${formatCurrency(v)}`;
-              if (metCfg.type === "percent") return `${metCfg.label}: ${(v * 100).toFixed(1)}%`;
-              return `${metCfg.label}: ${v.toLocaleString("es-MX")}`;
-            }
-          }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const idx = elements[0].index;
-        const rec = recs[idx];
-        manejarClickExplorer(dimKey, rec.key);
-      },
-      scales: baseType === "pie" || baseType === "doughnut"
-        ? {}
-        : {
-            y: {
-              ticks: {
-                callback: v => {
-                  if (metCfg.type === "money") return v.toLocaleString("es-MX");
-                  return v;
-                }
-              }
-            }
-          }
-    }
-  });
-
-  const titulo = document.getElementById("explorer-title");
-  if (titulo) {
-    titulo.textContent = `${metCfg.label} por ${dimCfg.label}`;
-  }
-}
-
-function manejarClickExplorer(dimKey, rawKey) {
-  if (dimKey === "almacen" && filterStore) {
-    filterStore.value = rawKey;
-    activarTab("tab-resumen");
-    actualizarTodo();
-  } else if (dimKey === "categoria" && filterCategory) {
-    if (rawKey === "(Sin categoría)") return;
-    filterCategory.value = rawKey;
-    activarTab("tab-detalle");
-    actualizarTodo();
-  } else if (dimKey === "anio" && filterYear) {
-    filterYear.value = String(rawKey);
-    activarTab("tab-resumen");
-    actualizarTodo();
-  } else if (dimKey === "tipo" && filterType) {
-    filterType.value = rawKey;
-    activarTab("tab-resumen");
-    actualizarTodo();
-  }
-}
-
-// ----- Vistas en localStorage -----
-
-function cargarVistasExplorerDesdeStorage() {
-  let views = [];
-  try {
-    const raw = localStorage.getItem(EXPLORER_VIEWS_KEY);
-    if (raw) views = JSON.parse(raw) || [];
-  } catch (e) {
-    views = [];
-  }
-  actualizarSelectVistasExplorer(views);
-}
-
-function actualizarSelectVistasExplorer(views) {
-  if (!explorerViewsSelect) return;
-  explorerViewsSelect.innerHTML = "<option value=''>Vistas guardadas...</option>";
-  views.forEach((v, idx) => {
-    const opt = document.createElement("option");
-    opt.value = String(idx);
-    opt.textContent = v.name;
-    explorerViewsSelect.appendChild(opt);
-  });
-}
-
-function guardarVistaExplorer() {
-  if (!explorerDimSelect || !explorerMetricSelect || !explorerTypeSelect || !explorerTopSelect || !explorerViewNameInput) return;
-
-  const nombre = explorerViewNameInput.value.trim();
-  if (!nombre) {
-    alert("Escribe un nombre para la vista.");
+function exportOperacionExcel() {
+  if (!currentOperacionLineas || !currentOperacionLineas.length) return;
+  if (typeof XLSX === "undefined") {
+    alert("XLSX no está disponible para exportar a Excel.");
     return;
   }
 
-  let views = [];
-  try {
-    const raw = localStorage.getItem(EXPLORER_VIEWS_KEY);
-    if (raw) views = JSON.parse(raw) || [];
-  } catch (e) {
-    views = [];
-  }
+  const data = currentOperacionLineas.map(l => ({
+    "Fecha": l.fecha instanceof Date ? l.fecha.toISOString().slice(0, 10) : "",
+    "Hora": l.hora || "",
+    "Cliente": l.cliente || "",
+    "Descripción": l.descripcion || "",
+    "Cantidad": toNumber(l.cantidad),
+    "Costo": toNumber(l.costo),
+    "Precio sin IVA": toNumber(l.precioSinIva),
+    "Vendedor": l.vendedor || ""
+  }));
 
-  const nueva = {
-    name: nombre,
-    dim: explorerDimSelect.value,
-    metric: explorerMetricSelect.value,
-    type: explorerTypeSelect.value,
-    top: explorerTopSelect.value
-  };
-
-  views.push(nueva);
-  localStorage.setItem(EXPLORER_VIEWS_KEY, JSON.stringify(views));
-  explorerViewNameInput.value = "";
-  actualizarSelectVistasExplorer(views);
-}
-
-function aplicarVistaExplorerPorIndice(idx) {
-  if (!explorerDimSelect || !explorerMetricSelect || !explorerTypeSelect || !explorerTopSelect) return;
-
-  let views = [];
-  try {
-    const raw = localStorage.getItem(EXPLORER_VIEWS_KEY);
-    if (raw) views = JSON.parse(raw) || [];
-  } catch (e) {
-    views = [];
-  }
-
-  const v = views[Number(idx)];
-  if (!v) return;
-
-  explorerDimSelect.value = v.dim;
-  explorerMetricSelect.value = v.metric;
-  explorerTypeSelect.value = v.type;
-  explorerTopSelect.value = v.top;
-  renderExplorerChart();
-}
-
-function initExplorer() {
-  if (!explorerDimSelect || !explorerMetricSelect || !explorerTypeSelect || !explorerTopSelect || !explorerCanvas) return;
-
-  explorerDimSelect.innerHTML = "";
-  Object.entries(EXPLORER_DIMENSIONS).forEach(([key, cfg]) => {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = cfg.label;
-    explorerDimSelect.appendChild(opt);
-  });
-
-  explorerMetricSelect.innerHTML = "";
-  Object.entries(EXPLORER_METRICS).forEach(([key, cfg]) => {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = cfg.label;
-    explorerMetricSelect.appendChild(opt);
-  });
-
-  explorerTypeSelect.innerHTML = `
-    <option value="bar">Barras</option>
-    <option value="bar-horizontal">Barras horizontales</option>
-    <option value="line">Línea</option>
-    <option value="pie">Pastel</option>
-    <option value="doughnut">Dona</option>
-  `;
-
-  explorerTopSelect.innerHTML = `
-    <option value="0">Todos</option>
-    <option value="5">Top 5</option>
-    <option value="10">Top 10</option>
-    <option value="20">Top 20</option>
-  `;
-
-  explorerDimSelect.value = "categoria";
-  explorerMetricSelect.value = "ventas";
-  explorerTypeSelect.value = "bar";
-  explorerTopSelect.value = "10";
-
-  explorerDimSelect.addEventListener("change", renderExplorerChart);
-  explorerMetricSelect.addEventListener("change", renderExplorerChart);
-  explorerTypeSelect.addEventListener("change", renderExplorerChart);
-  explorerTopSelect.addEventListener("change", renderExplorerChart);
-
-  if (explorerSaveBtn) {
-    explorerSaveBtn.addEventListener("click", guardarVistaExplorer);
-  }
-
-  if (explorerViewsSelect) {
-    explorerViewsSelect.addEventListener("change", () => {
-      if (!explorerViewsSelect.value) return;
-      aplicarVistaExplorerPorIndice(explorerViewsSelect.value);
-    });
-  }
-
-  cargarVistasExplorerDesdeStorage();
-  renderExplorerChart();
-}
-
-// ==================== EXPORTAR A EXCEL ====================
-
-function getDetalleFiltradoArray() {
-  const base = filtrarRecords(false);
-  let arr = base.slice();
-
-  arr = arr.filter(r => {
-    for (const col in detalleFiltros) {
-      const text = detalleFiltros[col];
-      if (!text) continue;
-      const v = getValorDetalle(r, col);
-      const s = typeof v === "number" ? v.toString() : (v || "").toString().toLowerCase();
-      if (!s.includes(text)) return false;
-    }
-    return true;
-  });
-
-  if (detalleBusqueda) {
-    arr = arr.filter(r => {
-      const campos = [r.cliente, r.vendedor, r.folio, r.almacen, r.categoria];
-      return campos.some(c => c && c.toString().toLowerCase().includes(detalleBusqueda));
-    });
-  }
-
-  if (detalleSort.col) {
-    const col = detalleSort.col;
-    const asc = detalleSort.asc;
-    arr.sort((a, b) => {
-      const va = getValorDetalle(a, col);
-      const vb = getValorDetalle(b, col);
-      if (typeof va === "number" && typeof vb === "number") {
-        return asc ? va - vb : vb - va;
-      }
-      const sa = (va || "").toString();
-      const sb = (vb || "").toString();
-      return asc ? sa.localeCompare(sb) : sb.localeCompare(sa);
-    });
-  }
-
-  const header = DETALLE_COLS.slice();
-  const data = [header];
-
-  arr.forEach(r => {
-    const row = DETALLE_COLS.map(col => {
-      const v = getValorDetalle(r, col);
-      if (col === "Subtotal" || col === "Costo" || col === "Utilidad") {
-        return toNumber(v);
-      }
-      if (col === "Margen %") {
-        return (r.subtotal > 0 ? r.utilidad / r.subtotal : 0);
-      }
-      return v || "";
-    });
-    data.push(row);
-  });
-
-  return data;
-}
-
-function exportDetalleToExcel() {
-  if (!records.length) return;
-  const aoa = getDetalleFiltradoArray();
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Detalle");
 
-  const filtros = getFiltros();
-  const yearTxt = filtros.year || "todos";
-  const almTxt = filtros.store || "todas";
-
-  const fileName = `detalle_ventas_${yearTxt}_${almTxt}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  const nombreArchivo = `Detalle_${currentOperacionMeta?.origen || "op"}_${currentOperacionMeta?.folio || ""}.xlsx`;
+  XLSX.writeFile(wb, nombreArchivo);
 }
 
-// ==================== DESCARGAR GRÁFICAS PNG / PDF ====================
+function exportOperacionPdf() {
+  if (!currentOperacionLineas || !currentOperacionLineas.length) return;
 
-function descargarGraficaPNG(key) {
-  const chart = charts[key];
-  if (!chart) return;
-  const link = document.createElement("a");
-  link.href = chart.toBase64Image("image/png", 1.0);
-  link.download = `grafica_${key}.png`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
+  const titulo = `Detalle ${currentOperacionMeta?.origen || ""} ${currentOperacionMeta?.folio || ""}`;
 
-function descargarGraficaPDF(key, titulo) {
-  const chart = charts[key];
-  if (!chart) return;
+  let html = `
+  <html>
+    <head>
+      <title>${titulo}</title>
+      <meta charset="UTF-8" />
+      <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; padding: 16px; }
+        h1 { font-size: 16px; margin-bottom: 4px; }
+        p { margin-top: 0; margin-bottom: 8px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #cbd5e1; padding: 4px 6px; }
+        th { background: #f1f5f9; text-align: left; }
+        td.num { text-align: right; }
+      </style>
+    </head>
+    <body>
+      <h1>${titulo}</h1>
+      <p>${modalOpSub ? modalOpSub.textContent : ""}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Cliente</th>
+            <th>Descripción</th>
+            <th>Cantidad</th>
+            <th>Costo</th>
+            <th>Precio s/IVA</th>
+            <th>Vendedor</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
 
-  const imgData = chart.toBase64Image("image/png", 1.0);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "pt",
-    format: "a4"
+  currentOperacionLineas.forEach(l => {
+    const fechaL = l.fecha instanceof Date
+      ? l.fecha.toISOString().slice(0, 10)
+      : "";
+    html += `
+      <tr>
+        <td>${fechaL}</td>
+        <td>${l.hora || ""}</td>
+        <td>${l.cliente || ""}</td>
+        <td>${l.descripcion || ""}</td>
+        <td class="num">${toNumber(l.cantidad).toLocaleString("es-MX")}</td>
+        <td class="num">${formatCurrency(toNumber(l.costo))}</td>
+        <td class="num">${formatCurrency(toNumber(l.precioSinIva))}</td>
+        <td>${l.vendedor || ""}</td>
+      </tr>
+    `;
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 40;
-  const imgWidth = pageWidth - margin * 2;
-  const imgHeight = imgWidth * 0.5;
+  html += `
+        </tbody>
+      </table>
+    </body>
+  </html>`;
 
-  doc.setFontSize(14);
-  doc.text(titulo || "Gráfica", margin, margin - 10);
-  doc.addImage(imgData, "PNG", margin, margin, imgWidth, imgHeight);
-  doc.save(`grafica_${key}.pdf`);
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print(); // el usuario puede elegir "Guardar como PDF"
+}
+
+function verOperacionEnDetalle() {
+  if (!currentOperacionMeta || !currentOperacionMeta.folio) return;
+  const folio = currentOperacionMeta.folio.toString();
+
+  // Activar pestaña Detalle
+  const tabBtnDetalle = Array.from(document.querySelectorAll(".tab-btn"))
+    .find(btn => btn.dataset.tab === "tab-detalle");
+  if (tabBtnDetalle) {
+    tabBtnDetalle.click();
+  }
+
+  // Buscar por folio en el buscador global
+  if (searchGlobalInput) {
+    searchGlobalInput.value = folio;
+    detalleBusqueda = folio.toLowerCase();
+    renderDetalle();
+  }
+
+  if (modalOpBackdrop) {
+    modalOpBackdrop.classList.remove("active");
+  }
+}
+
+if (modalOpClose && modalOpBackdrop) {
+  modalOpClose.addEventListener("click", () =>
+    modalOpBackdrop.classList.remove("active")
+  );
+  modalOpBackdrop.addEventListener("click", e => {
+    if (e.target === modalOpBackdrop) modalOpBackdrop.classList.remove("active");
+  });
+}
+if (modalOpExportExcel) {
+  modalOpExportExcel.addEventListener("click", exportOperacionExcel);
+}
+if (modalOpExportPdf) {
+  modalOpExportPdf.addEventListener("click", exportOperacionPdf);
+}
+if (modalOpVerDetalle) {
+  modalOpVerDetalle.addEventListener("click", verOperacionEnDetalle);
 }
 
 // ==================== TABS ====================
 
-function activarTab(tabId) {
-  document.querySelectorAll(".tab-btn").forEach(b => {
-    b.classList.toggle("active", b.dataset.tab === tabId);
-  });
-  document.querySelectorAll(".tab-panel").forEach(p => {
-    p.classList.toggle("active", p.id === tabId);
-  });
-}
-
 Array.from(document.querySelectorAll(".tab-btn")).forEach(btn => {
   btn.addEventListener("click", () => {
     const tabId = btn.dataset.tab;
-    activarTab(tabId);
+    document
+      .querySelectorAll(".tab-btn")
+      .forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document
+      .querySelectorAll(".tab-panel")
+      .forEach(p => p.classList.remove("active"));
+    const panel = document.getElementById(tabId);
+    if (panel) panel.classList.add("active");
   });
 });
 
-// Inicializar tabla de detalle vacía
+// ==================== INICIALIZACIÓN ====================
+
 initDetalleHeaders();
+renderDetallePool();
 renderDetalle();
