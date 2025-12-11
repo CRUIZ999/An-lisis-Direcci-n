@@ -10,7 +10,7 @@ const M2_POR_ALMACEN = {
   "Todas": 3225
 };
 
-// Mapeos de columnas (incluye posibles nombres de categoría)
+// Mapeos de columnas
 const RENAME_FACTURAS = {
   "No_fac": "Factura",
   "Falta_fac": "Fecha",
@@ -19,7 +19,7 @@ const RENAME_FACTURAS = {
   "Total_fac": "Total Factura",
   "Iva": "IVA",
   "Cve_cte": "ID Cliente",
-  "Cse_prod": "ID Categoria",
+  "Cse_prod": "Categoria",
   "Cve_prod": "Clave",
   "Cant_surt": "Pz.",
   "Dcto1": "Descuento (%)",
@@ -31,14 +31,7 @@ const RENAME_FACTURAS = {
   "Des_tial": "Marca",
   "Cto_ent": "Costo Ent.",
   "Nom_cte": "Cliente",
-  "Nom_age": "Vendedor",
-
-  // posibles columnas de categoría legible
-  "Categoria": "Categoria",
-  "Clase": "Categoria",
-  "Clase_prod": "Categoria",
-  "Desc_clase": "Categoria",
-  "Des_clase": "Categoria"
+  "Nom_age": "Vendedor"
 };
 
 const RENAME_NOTAS = {
@@ -54,24 +47,17 @@ const RENAME_NOTAS = {
   "Iva_prod": "IVA",
   "Dcto1": "Descuento (%)",
   "Hravta": "Hora",
-  "Cse_prod": "ID Clase",
+  "Cse_prod": "Categoria",
   "Total_fac": "Total Nota",
   "Nom_age": "Vendedor",
   "Des_tial": "Marca",
   "Cto_ent": "Costo Entrada",
   "Nom_fac": "Cliente",
-  "Cte_fac": "ID Cliente",
-
-  // posibles columnas de categoría legible
-  "Categoria": "Categoria",
-  "Clase": "Categoria",
-  "Clase_prod": "Categoria",
-  "Desc_clase": "Categoria",
-  "Des_clase": "Categoria"
+  "Cte_fac": "ID Cliente"
 };
 
-// Columnas disponibles para el detalle
-const DETALLE_ALL_COLS = [
+// Todas las columnas posibles para la tabla de detalle
+const DETALLE_COLS_ALL = [
   "Año",
   "Fecha",
   "Hora",
@@ -83,49 +69,15 @@ const DETALLE_ALL_COLS = [
   "Tipo factura",
   "Subtotal",
   "Costo",
-  "Descuento ($)",
-  "Descuento (%)",
   "Utilidad",
   "Margen %",
+  "Pz.",
   "Marca",
   "Vendedor"
 ];
 
-// Modos de vista de la tabla Detalle
-const DETALLE_VIEW_MODES = {
-  basic: ["Fecha", "Almacen", "Factura/Nota", "Cliente", "Subtotal"],
-  standard: ["Año", "Almacen", "Categoria", "Costo", "Subtotal", "Margen %", "Utilidad"],
-  analytic: [
-    "Año",
-    "Fecha",
-    "Almacen",
-    "Categoria",
-    "Producto",
-    "Tipo factura",
-    "Subtotal",
-    "Costo",
-    "Utilidad",
-    "Margen %"
-  ]
-};
-
-// Configuración rápida por defecto
-const CONFIG_DEFAULT = {
-  metricPrincipal: "ventas",       // ventas | utilidad | margen
-  tipoGraficaMensual: "bar",       // bar | line
-  modoTabla: "standard",           // basic | standard | analytic
-  soloMargenNegativo: false
-};
-
-let appConfig = { ...CONFIG_DEFAULT };
-
-// ==================== LOCALSTORAGE ====================
-
-const LS_KEY_CONFIG = "cedroDashboardConfigV1";
-const LS_KEY_DETALLE_COLS = "cedroDashboardDetalleColsV1";
-const LS_KEY_FILTROS = "cedroDashboardFiltrosV1";
-
-let savedFiltrosIniciales = null;
+// Número máximo de columnas visibles en detalle
+const DETALLE_MAX_COLS = 7;
 
 // ==================== UTILIDADES ====================
 
@@ -211,29 +163,39 @@ function renameRow(row, normMap) {
   return out;
 }
 
-// ==================== ESTADO ====================
+// ==================== ESTADO Y DOM ====================
 
 let records = [];
-let lineasDetalle = [];
-
 let yearsDisponibles = [];
 let almacenesDisponibles = [];
 let categoriasDisponibles = [];
 
 let charts = { mensual: null, almacen: null };
+let expChart = null;
 
-let detalleVisibles = [...DETALLE_VIEW_MODES.standard];
+// configuración persistente
+let config = {
+  mainMetric: "ventas",
+  chartType: "bar",
+  tableMode: "compact",
+  hideNegativeMargin: false,
+  maxFilasDetalle: 5000,
+  resaltarNegativos: true,
+  guardarVista: true,
+  expDimension: "mes",
+  expMetrica: "subtotal",
+  expChartType: "bar",
+  expExcluirNegativos: true
+};
 
 let detalleSort = { col: null, asc: true };
 let detalleFiltros = {};
 let detalleBusqueda = "";
+let detalleColsActivas = ["Año", "Almacen", "Categoria", "Subtotal", "Margen %", "Utilidad", "Vendedor"];
 
-// Estado de operación en modal
-let currentOperacionLineas = [];
-let currentOperacionMeta = null;
+let ultimaFacturaFiltro = null;
 
-// ==================== DOM ====================
-
+// DOM
 const fileInput = document.getElementById("file-input");
 const fileNameSpan = document.getElementById("file-name");
 const errorDiv = document.getElementById("error");
@@ -242,11 +204,6 @@ const filterYear = document.getElementById("filter-year");
 const filterStore = document.getElementById("filter-store");
 const filterType = document.getElementById("filter-type");
 const filterCategory = document.getElementById("filter-category");
-
-const configMetric = document.getElementById("config-metric");
-const configChartType = document.getElementById("config-chart-type");
-const configTableMode = document.getElementById("config-table-mode");
-const configNegativos = document.getElementById("config-negativos");
 
 const kpiVentas = document.getElementById("kpi-ventas");
 const kpiVentasSub = document.getElementById("kpi-ventas-sub");
@@ -269,7 +226,7 @@ const detalleHeaderRow = document.getElementById("detalle-header-row");
 const detalleFilterRow = document.getElementById("detalle-filter-row");
 const detalleTableBody = document.getElementById("tabla-detalle");
 const searchGlobalInput = document.getElementById("search-global");
-const detallePool = document.getElementById("detalle-cols-pool");
+const detalleChipContainer = document.getElementById("detalle-chip-container");
 
 const modalBackdrop = document.getElementById("modal-backdrop");
 const modalClose = document.getElementById("modal-close");
@@ -279,71 +236,77 @@ const modalYearPrev = document.getElementById("modal-year-prev");
 const modalYearCurrent = document.getElementById("modal-year-current");
 const modalTableBody = document.querySelector("#modal-table tbody");
 
-const modalOpBackdrop = document.getElementById("modal-op-backdrop");
-const modalOpClose = document.getElementById("modal-op-close");
-const modalOpTitle = document.getElementById("modal-op-title");
-const modalOpSub = document.getElementById("modal-op-sub");
-const modalOpBody = document.getElementById("modal-op-body");
+// Modal factura
+const modalFacturaBackdrop = document.getElementById("modal-factura-backdrop");
+const modalFacturaClose = document.getElementById("modal-factura-close");
+const modalFacturaTitle = document.getElementById("modal-factura-title");
+const modalFacturaSub = document.getElementById("modal-factura-sub");
+const modalFacturaTableBody = document.querySelector("#modal-factura-table tbody");
+const modalFacturaExportXls = document.getElementById("modal-factura-export-xls");
+const modalFacturaExportPdf = document.getElementById("modal-factura-export-pdf");
+const modalFacturaVerDetalle = document.getElementById("modal-factura-ver-detalle");
 
-const modalOpExportExcel = document.getElementById("modal-op-export-excel");
-const modalOpExportPdf = document.getElementById("modal-op-export-pdf");
-const modalOpVerDetalle = document.getElementById("modal-op-ver-detalle");
+// Config rápida
+const qcMainMetric = document.getElementById("qc-main-metric");
+const qcChartType = document.getElementById("qc-chart-type");
+const qcTableMode = document.getElementById("qc-table-mode");
+const qcHideNegativeMargin = document.getElementById("qc-hide-negative-margin");
 
-// ==================== LOCALSTORAGE LOAD ====================
+// Explorador
+const expDimensionSel = document.getElementById("exp-dimension");
+const expMetricaSel = document.getElementById("exp-metrica");
+const expChartTypeSel = document.getElementById("exp-chart-type");
+const expExcluirNegSel = document.getElementById("exp-excluir-negativos");
+const expChartTitle = document.getElementById("exp-chart-title");
 
-function saveConfigState() {
+// Config tab
+const confMaxFilas = document.getElementById("conf-max-filas");
+const confResaltarNegativos = document.getElementById("conf-resaltar-negativos");
+const confGuardarVista = document.getElementById("conf-guardar-vista");
+const confReset = document.getElementById("conf-reset");
+
+// ==================== LOCALSTORAGE ====================
+
+function loadConfig() {
   try {
-    localStorage.setItem(LS_KEY_CONFIG, JSON.stringify(appConfig));
-
-    if (Array.isArray(detalleVisibles)) {
-      localStorage.setItem(LS_KEY_DETALLE_COLS, JSON.stringify(detalleVisibles));
-    }
-
-    const filtros = {
-      year: filterYear ? filterYear.value : "all",
-      store: filterStore ? filterStore.value : "all",
-      tipo: filterType ? filterType.value : "both",
-      categoria: filterCategory ? filterCategory.value : "all"
-    };
-    localStorage.setItem(LS_KEY_FILTROS, JSON.stringify(filtros));
+    const raw = localStorage.getItem("cedroDashboardConfig");
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    config = { ...config, ...saved };
   } catch (e) {
-    console.warn("No se pudo guardar configuración:", e);
+    console.warn("No se pudo leer config:", e);
   }
 }
 
-function loadConfigState() {
+function saveConfig() {
+  if (!config.guardarVista) return;
   try {
-    const confStr = localStorage.getItem(LS_KEY_CONFIG);
-    if (confStr) {
-      const saved = JSON.parse(confStr);
-      appConfig = { ...CONFIG_DEFAULT, ...saved };
-    }
-
-    const colsStr = localStorage.getItem(LS_KEY_DETALLE_COLS);
-    if (colsStr) {
-      const savedCols = JSON.parse(colsStr);
-      if (Array.isArray(savedCols) && savedCols.length) {
-        detalleVisibles = savedCols;
-      }
-    }
-
-    const filtStr = localStorage.getItem(LS_KEY_FILTROS);
-    if (filtStr) {
-      savedFiltrosIniciales = JSON.parse(filtStr);
-    }
+    localStorage.setItem("cedroDashboardConfig", JSON.stringify(config));
   } catch (e) {
-    console.warn("No se pudo cargar configuración:", e);
+    console.warn("No se pudo guardar config:", e);
   }
 }
 
-// cargar configuración previa
-loadConfigState();
+function applyConfigToUI() {
+  if (qcMainMetric) qcMainMetric.value = config.mainMetric;
+  if (qcChartType) qcChartType.value = config.chartType;
+  if (qcTableMode) qcTableMode.value = config.tableMode;
+  if (qcHideNegativeMargin) qcHideNegativeMargin.checked = config.hideNegativeMargin;
 
-// sincronizar controles visuales con appConfig
-if (configMetric) configMetric.value = appConfig.metricPrincipal;
-if (configChartType) configChartType.value = appConfig.tipoGraficaMensual;
-if (configTableMode) configTableMode.value = appConfig.modoTabla;
-if (configNegativos) configNegativos.checked = appConfig.soloMargenNegativo;
+  if (expDimensionSel) expDimensionSel.value = config.expDimension;
+  if (expMetricaSel) expMetricaSel.value = config.expMetrica;
+  if (expChartTypeSel) expChartTypeSel.value = config.expChartType;
+  if (expExcluirNegSel) expExcluirNegSel.checked = config.expExcluirNegativos;
+
+  if (confMaxFilas) confMaxFilas.value = config.maxFilasDetalle;
+  if (confResaltarNegativos) confResaltarNegativos.checked = config.resaltarNegativos;
+  if (confGuardarVista) confGuardarVista.checked = config.guardarVista;
+
+  document.body.classList.toggle("table-comfortable", config.tableMode === "comfortable");
+}
+
+loadConfig();
+applyConfigToUI();
 
 // ==================== LECTURA DE ARCHIVO ====================
 
@@ -354,10 +317,9 @@ if (fileInput) {
 function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
-  if (fileNameSpan) fileNameSpan.textContent = file.name;
-  if (errorDiv) errorDiv.textContent = "";
+  fileNameSpan.textContent = file.name;
+  errorDiv.textContent = "";
   records = [];
-  lineasDetalle = [];
 
   const reader = new FileReader();
   reader.onload = function (evt) {
@@ -433,32 +395,15 @@ function handleFile(e) {
           .trim()
           .toUpperCase();
 
-        const categoria = (
-          row["Categoria"] ||
-          row["ID Categoria"] ||
-          ""
-        ).toString().trim();
+        const categoria = (row["Categoria"] || "").toString().trim();
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
         const folio = (row["Factura"] || "").toString().trim();
         const marca = (row["Marca"] || "").toString().trim();
+        const articulo = (row["Articulo"] || "").toString().trim();
         const hora = (row["Hora"] || "").toString().trim();
-        const producto = (row["Articulo"] || "").toString().trim();
-        const cantidad = toNumber(row["Pz."] ?? row["Cant_surt"] ?? 0);
-
-        // líneas detalle por factura
-        lineasDetalle.push({
-          origen: "factura",
-          folio,
-          fecha,
-          hora,
-          cliente,
-          vendedor,
-          descripcion: producto,
-          cantidad,
-          costo: toNumber(row["Costo Ent."]),
-          precioSinIva: subtotal
-        });
+        const pz = toNumber(row["Pz."]);
+        const precioUnit = pz > 0 ? subtotal / pz : 0;
 
         records.push({
           origen: "factura",
@@ -472,7 +417,8 @@ function handleFile(e) {
           vendedor,
           marca,
           folio,
-          producto,
+          articulo,
+          pz,
           subtotal,
           costo,
           utilidad,
@@ -480,7 +426,8 @@ function handleFile(e) {
           descuentoMonto,
           descuentoPct,
           esCredito,
-          tipoFactura
+          tipoFactura,
+          precioUnit
         });
       }
 
@@ -514,31 +461,15 @@ function handleFile(e) {
           .toString()
           .trim()
           .toUpperCase();
-        const categoria = (
-          row["Categoria"] ||
-          row["ID Clase"] ||
-          ""
-        ).toString().trim();
+        const categoria = (row["Categoria"] || "").toString().trim();
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
         const folio = (row["Nota"] || "").toString().trim();
         const marca = (row["Marca"] || "").toString().trim();
+        const articulo = (row["Articulo"] || "").toString().trim();
         const hora = (row["Hora"] || "").toString().trim();
-        const producto = (row["Articulo"] || "").toString().trim();
-        const cantidad = toNumber(row["Pz."] ?? row["Cant_surt"] ?? 0);
-
-        lineasDetalle.push({
-          origen: "nota",
-          folio,
-          fecha,
-          hora,
-          cliente,
-          vendedor,
-          descripcion: producto,
-          cantidad,
-          costo: toNumber(row["Costo Entrada"]),
-          precioSinIva: subtotal
-        });
+        const pz = toNumber(row["Pz."]);
+        const precioUnit = pz > 0 ? subtotal / pz : 0;
 
         records.push({
           origen: "nota",
@@ -552,7 +483,8 @@ function handleFile(e) {
           vendedor,
           marca,
           folio,
-          producto,
+          articulo,
+          pz,
           subtotal,
           costo,
           utilidad,
@@ -560,7 +492,8 @@ function handleFile(e) {
           descuentoMonto,
           descuentoPct,
           esCredito,
-          tipoFactura
+          tipoFactura,
+          precioUnit
         });
       }
 
@@ -576,9 +509,8 @@ function handleFile(e) {
 
       poblarFiltros();
       initDetalleHeaders();
-      renderDetallePool();
+      initDetalleChips();
       actualizarTodo();
-      saveConfigState();
     } catch (err) {
       console.error(err);
       if (errorDiv) {
@@ -627,37 +559,21 @@ function poblarFiltros() {
   filterStore.disabled = false;
   filterType.disabled = false;
   filterCategory.disabled = false;
-
-  // aplicar filtros guardados
-  if (savedFiltrosIniciales) {
-    if (filterYear && savedFiltrosIniciales.year) {
-      filterYear.value = savedFiltrosIniciales.year;
-    }
-    if (filterStore && savedFiltrosIniciales.store) {
-      filterStore.value = savedFiltrosIniciales.store;
-    }
-    if (filterType && savedFiltrosIniciales.tipo) {
-      filterType.value = savedFiltrosIniciales.tipo;
-    }
-    if (filterCategory && savedFiltrosIniciales.categoria) {
-      filterCategory.value = savedFiltrosIniciales.categoria;
-    }
-  }
 }
 
 function getFiltros() {
   return {
-    year:
-      filterYear && filterYear.value !== "all"
-        ? parseInt(filterYear.value, 10)
-        : null,
-    store:
-      filterStore && filterStore.value !== "all"
-        ? filterStore.value
-        : null,
+    year: filterYear && filterYear.value === "all"
+      ? null
+      : filterYear
+      ? parseInt(filterYear.value, 10)
+      : null,
+    store: filterStore && filterStore.value === "all" ? null : filterStore ? filterStore.value : null,
     tipo: filterType ? filterType.value : "both",
     categoria:
-      filterCategory && filterCategory.value !== "all"
+      filterCategory && filterCategory.value === "all"
+        ? null
+        : filterCategory
         ? filterCategory.value
         : null
   };
@@ -675,61 +591,10 @@ function filtrarRecords(ignorarYear) {
   });
 }
 
-// listeners filtros
-if (filterYear) filterYear.addEventListener("change", () => {
-  actualizarTodo();
-  saveConfigState();
-});
-if (filterStore) filterStore.addEventListener("change", () => {
-  actualizarTodo();
-  saveConfigState();
-});
-if (filterType) filterType.addEventListener("change", () => {
-  actualizarTodo();
-  saveConfigState();
-});
-if (filterCategory) filterCategory.addEventListener("change", () => {
-  actualizarTodo();
-  saveConfigState();
-});
-
-// ==================== CONFIG RÁPIDA LISTENERS ====================
-
-if (configMetric) {
-  configMetric.addEventListener("change", () => {
-    appConfig.metricPrincipal = configMetric.value;
-    actualizarTodo();
-    saveConfigState();
-  });
-}
-
-if (configChartType) {
-  configChartType.addEventListener("change", () => {
-    appConfig.tipoGraficaMensual = configChartType.value;
-    actualizarTodo();
-    saveConfigState();
-  });
-}
-
-if (configTableMode) {
-  configTableMode.addEventListener("change", () => {
-    appConfig.modoTabla = configTableMode.value;
-    if (DETALLE_VIEW_MODES[appConfig.modoTabla]) {
-      detalleVisibles = [...DETALLE_VIEW_MODES[appConfig.modoTabla]];
-      initDetalleHeaders();
-      renderDetalle();
-      saveConfigState();
-    }
-  });
-}
-
-if (configNegativos) {
-  configNegativos.addEventListener("change", () => {
-    appConfig.soloMargenNegativo = configNegativos.checked;
-    renderDetalle();
-    saveConfigState();
-  });
-}
+if (filterYear) filterYear.addEventListener("change", actualizarTodo);
+if (filterStore) filterStore.addEventListener("change", actualizarTodo);
+if (filterType) filterType.addEventListener("change", actualizarTodo);
+if (filterCategory) filterCategory.addEventListener("change", actualizarTodo);
 
 // ==================== KPIs / GRÁFICAS / TOP ====================
 
@@ -741,6 +606,7 @@ function actualizarTodo() {
   actualizarTop(datos);
   actualizarYoY();
   renderDetalle();
+  actualizarExplorador();
 }
 
 function actualizarKpis(data) {
@@ -794,59 +660,31 @@ function actualizarGraficas(data) {
   }
 
   const ventasMes = new Array(12).fill(0);
-  const utilMes = new Array(12).fill(0);
-
   base.forEach(r => {
     const idx = r.mes - 1;
-    if (idx < 0 || idx > 11) return;
-    ventasMes[idx] += r.subtotal;
-    if (r.incluirUtilidad) utilMes[idx] += r.utilidad;
+    if (idx >= 0 && idx < 12) ventasMes[idx] += r.subtotal;
   });
-
-  const margenMes = ventasMes.map((v, i) => (v > 0 ? utilMes[i] / v : 0));
   const labelsMes = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-
-  let dataMensual, labelMensual;
-  switch (appConfig.metricPrincipal) {
-    case "utilidad":
-      dataMensual = utilMes;
-      labelMensual = "Utilidad bruta";
-      break;
-    case "margen":
-      dataMensual = margenMes.map(x => x * 100);
-      labelMensual = "Margen bruto %";
-      break;
-    default:
-      dataMensual = ventasMes;
-      labelMensual = "Ventas (Subtotal)";
-  }
-
-  const tipoGrafica = appConfig.tipoGraficaMensual === "line" ? "line" : "bar";
 
   if (charts.mensual) charts.mensual.destroy();
   charts.mensual = new Chart(ctxMensual, {
-    type: tipoGrafica,
+    type: config.chartType === "line" ? "line" : "bar",
     data: {
       labels: labelsMes,
-      datasets: [{ label: labelMensual, data: dataMensual }]
+      datasets: [{ label: "Ventas", data: ventasMes }]
     },
     options: {
       responsive: true,
       scales: {
-        y: {
-          ticks: {
-            callback: v => v.toLocaleString("es-MX")
-          }
-        }
+        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
       }
     }
   });
 
-  // GRÁFICA POR ALMACÉN
   const porAlm = {};
   data.forEach(r => {
     const a = r.almacen || "(sin)";
-    if (!porAlm[a]) porAlm[a] = { ventas: 0 };
+    if (!porAlm[a]) porAlm[a] = { ventas: 0, m2Ventas: 0 };
     porAlm[a].ventas += r.subtotal;
   });
 
@@ -898,14 +736,7 @@ function actualizarTop(data) {
       utilidad: d.util,
       margen: d.n ? d.mAcum / d.n : 0
     }))
-    .sort((a, b) => {
-      if (appConfig.metricPrincipal === "utilidad") {
-        return b.utilidad - a.utilidad;
-      } else if (appConfig.metricPrincipal === "margen") {
-        return b.margen - a.margen;
-      }
-      return b.ventas - a.ventas;
-    })
+    .sort((a, b) => b.ventas - a.ventas)
     .slice(0, 5);
 
   tablaTopClientes.innerHTML = "";
@@ -936,24 +767,13 @@ function actualizarTop(data) {
   });
 
   const listaV = Object.entries(vend)
-    .map(([nombre, d]) => {
-      const margen = d.ventas > 0 ? d.util / d.ventas : 0;
-      return {
-        nombre,
-        ventas: d.ventas,
-        utilidad: d.util,
-        margen,
-        ops: (opsPorVend[nombre] || new Set()).size
-      };
-    })
-    .sort((a, b) => {
-      if (appConfig.metricPrincipal === "utilidad") {
-        return b.utilidad - a.utilidad;
-      } else if (appConfig.metricPrincipal === "margen") {
-        return b.margen - a.margen;
-      }
-      return b.ventas - a.ventas;
-    })
+    .map(([nombre, d]) => ({
+      nombre,
+      ventas: d.ventas,
+      utilidad: d.util,
+      ops: (opsPorVend[nombre] || new Set()).size
+    }))
+    .sort((a, b) => b.ventas - a.ventas)
     .slice(0, 5);
 
   tablaTopVendedores.innerHTML = "";
@@ -1219,106 +1039,13 @@ if (modalClose && modalBackdrop) {
   });
 }
 
-// ==================== DETALLE – COLUMNAS DINÁMICAS ====================
-
-function renderDetallePool() {
-  if (!detallePool) return;
-  detallePool.innerHTML = "";
-
-  DETALLE_ALL_COLS.forEach(col => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.textContent = col;
-    chip.draggable = true;
-
-    chip.addEventListener("dragstart", e => {
-      chip.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "copyMove";
-      e.dataTransfer.setData("text/plain", col);
-    });
-
-    chip.addEventListener("dragend", () => {
-      chip.classList.remove("dragging");
-    });
-
-    detallePool.appendChild(chip);
-  });
-}
-
-function handleDropOnHeader(e) {
-  e.preventDefault();
-  const newCol = e.dataTransfer.getData("text/plain");
-  const idx = parseInt(e.currentTarget.dataset.colIndex, 10);
-  e.currentTarget.classList.remove("drag-over");
-  if (!newCol || isNaN(idx)) return;
-
-  const current = [...detalleVisibles];
-  const existingIdx = current.indexOf(newCol);
-  if (existingIdx !== -1) {
-    const tmp = current[idx];
-    current[idx] = newCol;
-    current[existingIdx] = tmp;
-  } else {
-    current[idx] = newCol;
-  }
-
-  detalleVisibles = current;
-  initDetalleHeaders();
-  renderDetalle();
-  saveConfigState();
-}
+// ==================== DETALLE ====================
 
 function initDetalleHeaders() {
   if (!detalleHeaderRow || !detalleFilterRow) return;
 
-  detalleHeaderRow.innerHTML = "";
-  detalleFilterRow.innerHTML = "";
+  renderDetalleHeaders();
   detalleFiltros = {};
-
-  detalleVisibles.forEach((col, idx) => {
-    const th = document.createElement("th");
-    th.classList.add("sortable", "th-drop-target");
-    th.dataset.col = col;
-    th.dataset.colIndex = idx;
-
-    const label = document.createElement("div");
-    label.className = "th-label";
-    label.innerHTML = `${col} <span class="helper">⇧⇩</span>`;
-    th.appendChild(label);
-
-    th.addEventListener("click", e => {
-      if (e.detail === 0) return;
-      sortDetalle(col);
-    });
-
-    th.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      th.classList.add("drag-over");
-    });
-    th.addEventListener("dragleave", () => {
-      th.classList.remove("drag-over");
-    });
-    th.addEventListener("drop", handleDropOnHeader);
-
-    detalleHeaderRow.appendChild(th);
-
-    const thF = document.createElement("th");
-    const inp = document.createElement("input");
-    inp.type = "text";
-    inp.className = "filter-input";
-    inp.placeholder = "Filtrar...";
-    inp.addEventListener(
-      "input",
-      debounce(() => {
-        detalleFiltros[col] = inp.value.toLowerCase();
-        renderDetalle();
-      }, 150)
-    );
-    thF.appendChild(inp);
-    detalleFilterRow.appendChild(thF);
-  });
 
   if (searchGlobalInput) {
     searchGlobalInput.addEventListener(
@@ -1331,12 +1058,87 @@ function initDetalleHeaders() {
   }
 }
 
+function renderDetalleHeaders() {
+  detalleHeaderRow.innerHTML = "";
+  detalleFilterRow.innerHTML = "";
+
+  detalleColsActivas.forEach(col => {
+    const th = document.createElement("th");
+    th.classList.add("sortable", "th-drop-target");
+    th.dataset.col = col;
+    th.draggable = false;
+    th.innerHTML = `${col} <span>⇅</span>`;
+    th.addEventListener("click", () => sortDetalle(col));
+    th.addEventListener("dragover", e => {
+      e.preventDefault();
+    });
+    th.addEventListener("drop", e => {
+      e.preventDefault();
+      const colName = e.dataTransfer.getData("text/colName");
+      if (!colName) return;
+      // insertar en la posición de esta columna
+      const idx = detalleColsActivas.indexOf(col);
+      if (idx === -1) return;
+      if (!detalleColsActivas.includes(colName)) {
+        // sustituir
+        detalleColsActivas[idx] = colName;
+      } else {
+        // reordenar
+        const from = detalleColsActivas.indexOf(colName);
+        detalleColsActivas.splice(from, 1);
+        detalleColsActivas.splice(idx, 0, colName);
+      }
+      renderDetalleHeaders();
+      renderDetalle();
+      initDetalleChips();
+      saveConfig();
+    });
+    detalleHeaderRow.appendChild(th);
+
+    const thF = document.createElement("th");
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "filter-input";
+    inp.placeholder = "Filtrar...";
+    inp.value = detalleFiltros[col] || "";
+    inp.addEventListener(
+      "input",
+      debounce(() => {
+        detalleFiltros[col] = inp.value.toLowerCase();
+        renderDetalle();
+      }, 150)
+    );
+    thF.appendChild(inp);
+    detalleFilterRow.appendChild(thF);
+  });
+}
+
+function initDetalleChips() {
+  if (!detalleChipContainer) return;
+  detalleChipContainer.innerHTML = "";
+
+  DETALLE_COLS_ALL.forEach(col => {
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.textContent = col;
+    chip.dataset.col = col;
+    if (detalleColsActivas.includes(col)) {
+      chip.classList.add("active");
+    }
+    chip.draggable = true;
+    chip.addEventListener("dragstart", e => {
+      e.dataTransfer.setData("text/colName", col);
+    });
+    detalleChipContainer.appendChild(chip);
+  });
+}
+
 function getValorDetalle(r, col) {
   switch (col) {
     case "Año":
       return r.anio;
     case "Fecha":
-      return r.fecha ? r.fecha.toISOString().slice(0, 10) : "";
+      return r.fecha.toISOString().slice(0, 10);
     case "Hora":
       return r.hora || "";
     case "Almacen":
@@ -1348,21 +1150,19 @@ function getValorDetalle(r, col) {
     case "Categoria":
       return r.categoria;
     case "Producto":
-      return r.producto;
+      return r.articulo;
     case "Tipo factura":
       return r.tipoFactura === "credito" ? "Crédito" : "Contado";
     case "Subtotal":
       return r.subtotal;
     case "Costo":
       return r.costo;
-    case "Descuento ($)":
-      return r.descuentoMonto;
-    case "Descuento (%)":
-      return r.descuentoPct / 100;
     case "Utilidad":
       return r.utilidad;
     case "Margen %":
       return r.subtotal > 0 ? r.utilidad / r.subtotal : 0;
+    case "Pz.":
+      return r.pz;
     case "Marca":
       return r.marca;
     case "Vendedor":
@@ -1387,15 +1187,10 @@ function renderDetalle() {
   const base = filtrarRecords(false);
   let arr = base.slice();
 
-  // solo márgenes negativos
-  if (appConfig.soloMargenNegativo) {
-    arr = arr.filter(r => r.subtotal > 0 && r.utilidad < 0);
-  }
-
   // filtros por columna
   arr = arr.filter(r => {
-    for (const col in detalleFiltros) {
-      const text = detalleFiltros[col];
+    for (const col of detalleColsActivas) {
+      const text = (detalleFiltros[col] || "").trim();
       if (!text) continue;
       const v = getValorDetalle(r, col);
       const s =
@@ -1416,12 +1211,17 @@ function renderDetalle() {
         r.folio,
         r.almacen,
         r.categoria,
-        r.producto
+        r.articulo
       ];
       return campos.some(
         c => c && c.toString().toLowerCase().includes(detalleBusqueda)
       );
     });
+  }
+
+  // ocultar márgenes negativos si aplica
+  if (config.hideNegativeMargin) {
+    arr = arr.filter(r => r.subtotal <= 0 || r.utilidad / r.subtotal >= 0);
   }
 
   // orden
@@ -1440,226 +1240,153 @@ function renderDetalle() {
     });
   }
 
+  // limitar filas
+  arr = arr.slice(0, config.maxFilasDetalle || 5000);
+
   detalleTableBody.innerHTML = "";
   arr.forEach(r => {
     const tr = document.createElement("tr");
-
-    detalleVisibles.forEach(col => {
+    tr.classList.add("clickable-row");
+    tr.dataset.origen = r.origen;
+    tr.dataset.folio = r.folio;
+    detalleColsActivas.forEach(col => {
       const td = document.createElement("td");
       let v = getValorDetalle(r, col);
-
-      if (["Subtotal", "Costo", "Utilidad", "Descuento ($)"].includes(col)) {
+      if (col === "Subtotal" || col === "Costo" || col === "Utilidad") {
         td.classList.add("text-right");
         const num = toNumber(v);
         td.textContent = formatCurrency(num);
-        if (num < 0) td.classList.add("neg");
-      } else if (col === "Margen %" || col === "Descuento (%)") {
+        if (num < 0 && config.resaltarNegativos) td.classList.add("neg");
+      } else if (col === "Margen %") {
         td.classList.add("text-right");
-        const num = typeof v === "number" ? v : toNumber(v);
-        td.textContent = formatPercent(num);
-        if (num < 0) td.classList.add("neg");
+        td.textContent = formatPercent(v);
+        if (v < 0 && config.resaltarNegativos) td.classList.add("neg");
+      } else if (col === "Pz.") {
+        td.classList.add("text-right");
+        td.textContent = v || "";
       } else {
         td.textContent = v || "";
       }
-
       tr.appendChild(td);
     });
-
     tr.addEventListener("click", () => {
-      abrirDetalleOperacion(r.origen, r.folio);
+      abrirDetalleFactura(r.origen, r.folio);
     });
-
     detalleTableBody.appendChild(tr);
   });
 }
 
-// ==================== MODAL DETALLE OPERACIÓN ====================
+// ==================== MODAL DETALLE FACTURA ====================
 
-function abrirDetalleOperacion(origen, folio) {
-  if (!modalOpBackdrop || !modalOpBody || !modalOpTitle || !modalOpSub) return;
-  if (!folio) return;
+function abrirDetalleFactura(origen, folio) {
+  if (!modalFacturaBackdrop) return;
 
-  const lineas = lineasDetalle.filter(
-    l => l.origen === origen && l.folio === folio
+  const items = records.filter(
+    r => r.origen === origen && r.folio === folio
   );
-  if (!lineas.length) return;
+  if (!items.length) return;
 
-  currentOperacionLineas = lineas;
-  currentOperacionMeta = { origen, folio };
+  const r0 = items[0];
+  ultimaFacturaFiltro = { origen, folio, cliente: r0.cliente };
 
-  const cab = lineas[0];
+  modalFacturaTitle.textContent = `Detalle de ${origen === "factura" ? "factura" : "nota"} ${folio}`;
+  const fechaTxt = r0.fecha.toISOString().slice(0, 10);
+  modalFacturaSub.textContent =
+    `Fecha: ${fechaTxt} | Cliente: ${r0.cliente || "(sin cliente)"} | Almacén: ${r0.almacen || ""} | Vendedor: ${r0.vendedor || ""}`;
 
-  const tipoTxt = origen === "factura" ? "Factura" : "Nota";
-  const fechaStr = cab.fecha instanceof Date
-    ? cab.fecha.toISOString().slice(0, 10)
-    : "";
-
-  modalOpTitle.textContent = `${tipoTxt} ${folio}`;
-  modalOpSub.textContent =
-    `Fecha: ${fechaStr} ${cab.hora || ""} · ` +
-    `Cliente: ${cab.cliente || "(sin cliente)"} · ` +
-    `Vendedor: ${cab.vendedor || "(sin vendedor)"}`;
-
-  modalOpBody.innerHTML = "";
-  lineas.forEach(l => {
-    const fechaL = l.fecha instanceof Date
-      ? l.fecha.toISOString().slice(0, 10)
-      : "";
-
+  modalFacturaTableBody.innerHTML = "";
+  items.forEach(it => {
     const tr = document.createElement("tr");
+    const fechaLinea = it.fecha.toISOString().slice(0, 10);
+    const precioUnit = it.precioUnit || (it.pz > 0 ? it.subtotal / it.pz : 0);
     tr.innerHTML = `
-      <td>${fechaL}</td>
-      <td>${l.hora || ""}</td>
-      <td>${l.cliente || ""}</td>
-      <td>${l.descripcion || ""}</td>
-      <td class="text-right">${toNumber(l.cantidad).toLocaleString("es-MX")}</td>
-      <td class="text-right">${formatCurrency(toNumber(l.costo))}</td>
-      <td class="text-right">${formatCurrency(toNumber(l.precioSinIva))}</td>
-      <td>${l.vendedor || ""}</td>
+      <td>${fechaLinea}</td>
+      <td>${it.hora || ""}</td>
+      <td>${it.folio}</td>
+      <td>${it.cliente || ""}</td>
+      <td>${it.articulo || ""}</td>
+      <td class="text-right">${(it.pz || 0).toLocaleString("es-MX")}</td>
+      <td class="text-right">${formatCurrency(it.costo)}</td>
+      <td class="text-right">${formatCurrency(precioUnit)}</td>
+      <td>${it.vendedor || ""}</td>
     `;
-    modalOpBody.appendChild(tr);
+    modalFacturaTableBody.appendChild(tr);
   });
 
-  modalOpBackdrop.classList.add("active");
+  modalFacturaBackdrop.classList.add("active");
 }
 
-function exportOperacionExcel() {
-  if (!currentOperacionLineas || !currentOperacionLineas.length) return;
-  if (typeof XLSX === "undefined") {
-    alert("XLSX no está disponible para exportar a Excel.");
-    return;
-  }
-
-  const data = currentOperacionLineas.map(l => ({
-    "Fecha": l.fecha instanceof Date ? l.fecha.toISOString().slice(0, 10) : "",
-    "Hora": l.hora || "",
-    "Cliente": l.cliente || "",
-    "Descripción": l.descripcion || "",
-    "Cantidad": toNumber(l.cantidad),
-    "Costo": toNumber(l.costo),
-    "Precio sin IVA": toNumber(l.precioSinIva),
-    "Vendedor": l.vendedor || ""
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Detalle");
-
-  const nombreArchivo = `Detalle_${currentOperacionMeta?.origen || "op"}_${currentOperacionMeta?.folio || ""}.xlsx`;
-  XLSX.writeFile(wb, nombreArchivo);
-}
-
-function exportOperacionPdf() {
-  if (!currentOperacionLineas || !currentOperacionLineas.length) return;
-
-  const titulo = `Detalle ${currentOperacionMeta?.origen || ""} ${currentOperacionMeta?.folio || ""}`;
-
-  let html = `
-  <html>
-    <head>
-      <title>${titulo}</title>
-      <meta charset="UTF-8" />
-      <style>
-        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; padding: 16px; }
-        h1 { font-size: 16px; margin-bottom: 4px; }
-        p { margin-top: 0; margin-bottom: 8px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #cbd5e1; padding: 4px 6px; }
-        th { background: #f1f5f9; text-align: left; }
-        td.num { text-align: right; }
-      </style>
-    </head>
-    <body>
-      <h1>${titulo}</h1>
-      <p>${modalOpSub ? modalOpSub.textContent : ""}</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Hora</th>
-            <th>Cliente</th>
-            <th>Descripción</th>
-            <th>Cantidad</th>
-            <th>Costo</th>
-            <th>Precio s/IVA</th>
-            <th>Vendedor</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
-
-  currentOperacionLineas.forEach(l => {
-    const fechaL = l.fecha instanceof Date
-      ? l.fecha.toISOString().slice(0, 10)
-      : "";
-    html += `
-      <tr>
-        <td>${fechaL}</td>
-        <td>${l.hora || ""}</td>
-        <td>${l.cliente || ""}</td>
-        <td>${l.descripcion || ""}</td>
-        <td class="num">${toNumber(l.cantidad).toLocaleString("es-MX")}</td>
-        <td class="num">${formatCurrency(toNumber(l.costo))}</td>
-        <td class="num">${formatCurrency(toNumber(l.precioSinIva))}</td>
-        <td>${l.vendedor || ""}</td>
-      </tr>
-    `;
-  });
-
-  html += `
-        </tbody>
-      </table>
-    </body>
-  </html>`;
-
-  const w = window.open("", "_blank");
-  if (!w) return;
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  w.print(); // el usuario puede elegir "Guardar como PDF"
-}
-
-function verOperacionEnDetalle() {
-  if (!currentOperacionMeta || !currentOperacionMeta.folio) return;
-  const folio = currentOperacionMeta.folio.toString();
-
-  // Activar pestaña Detalle
-  const tabBtnDetalle = Array.from(document.querySelectorAll(".tab-btn"))
-    .find(btn => btn.dataset.tab === "tab-detalle");
-  if (tabBtnDetalle) {
-    tabBtnDetalle.click();
-  }
-
-  // Buscar por folio en el buscador global
-  if (searchGlobalInput) {
-    searchGlobalInput.value = folio;
-    detalleBusqueda = folio.toLowerCase();
-    renderDetalle();
-  }
-
-  if (modalOpBackdrop) {
-    modalOpBackdrop.classList.remove("active");
-  }
-}
-
-if (modalOpClose && modalOpBackdrop) {
-  modalOpClose.addEventListener("click", () =>
-    modalOpBackdrop.classList.remove("active")
+if (modalFacturaClose && modalFacturaBackdrop) {
+  modalFacturaClose.addEventListener("click", () =>
+    modalFacturaBackdrop.classList.remove("active")
   );
-  modalOpBackdrop.addEventListener("click", e => {
-    if (e.target === modalOpBackdrop) modalOpBackdrop.classList.remove("active");
+  modalFacturaBackdrop.addEventListener("click", e => {
+    if (e.target === modalFacturaBackdrop) modalFacturaBackdrop.classList.remove("active");
   });
 }
-if (modalOpExportExcel) {
-  modalOpExportExcel.addEventListener("click", exportOperacionExcel);
+
+function exportTableToCsv(table, filename) {
+  const rows = Array.from(table.querySelectorAll("tr"));
+  const lines = rows.map(row => {
+    const cells = Array.from(row.querySelectorAll("th,td"));
+    return cells
+      .map(c => {
+        const text = c.textContent.replace(/"/g, '""');
+        return `"${text}"`;
+      })
+      .join(",");
+  });
+  const csv = lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
-if (modalOpExportPdf) {
-  modalOpExportPdf.addEventListener("click", exportOperacionPdf);
+
+if (modalFacturaExportXls) {
+  modalFacturaExportXls.addEventListener("click", () => {
+    const table = document.getElementById("modal-factura-table");
+    if (!table) return;
+    const name = ultimaFacturaFiltro
+      ? `detalle_${ultimaFacturaFiltro.origen}_${ultimaFacturaFiltro.folio}.csv`
+      : "detalle_factura.csv";
+    exportTableToCsv(table, name);
+  });
 }
-if (modalOpVerDetalle) {
-  modalOpVerDetalle.addEventListener("click", verOperacionEnDetalle);
+
+if (modalFacturaExportPdf) {
+  modalFacturaExportPdf.addEventListener("click", () => {
+    const table = document.getElementById("modal-factura-table");
+    if (!table) return;
+    const win = window.open("", "_blank");
+    win.document.write("<html><head><title>Detalle factura</title></head><body>");
+    win.document.write("<h3>Detalle de factura / nota</h3>");
+    win.document.write(table.outerHTML);
+    win.document.write("</body></html>");
+    win.document.close();
+    win.focus();
+    win.print();
+  });
+}
+
+if (modalFacturaVerDetalle) {
+  modalFacturaVerDetalle.addEventListener("click", () => {
+    if (!ultimaFacturaFiltro) return;
+    // ir a tab Detalle y filtrar por factura
+    const tabBtnDetalle = document.querySelector('.tab-btn[data-tab="tab-detalle"]');
+    if (tabBtnDetalle) tabBtnDetalle.click();
+
+    detalleFiltros["Factura/Nota"] = ultimaFacturaFiltro.folio.toString().toLowerCase();
+    renderDetalleHeaders(); // reinyecta filtros
+    renderDetalle();
+
+    modalFacturaBackdrop.classList.remove("active");
+  });
 }
 
 // ==================== TABS ====================
@@ -1679,8 +1406,270 @@ Array.from(document.querySelectorAll(".tab-btn")).forEach(btn => {
   });
 });
 
-// ==================== INICIALIZACIÓN ====================
-
+// Inicializar tabla de detalle vacía
 initDetalleHeaders();
-renderDetallePool();
+initDetalleChips();
 renderDetalle();
+
+// ==================== CONFIG RÁPIDA EVENTOS ====================
+
+if (qcMainMetric) {
+  qcMainMetric.addEventListener("change", () => {
+    config.mainMetric = qcMainMetric.value;
+    saveConfig();
+  });
+}
+if (qcChartType) {
+  qcChartType.addEventListener("change", () => {
+    config.chartType = qcChartType.value;
+    saveConfig();
+    actualizarTodo();
+  });
+}
+if (qcTableMode) {
+  qcTableMode.addEventListener("change", () => {
+    config.tableMode = qcTableMode.value;
+    document.body.classList.toggle("table-comfortable", config.tableMode === "comfortable");
+    saveConfig();
+  });
+}
+if (qcHideNegativeMargin) {
+  qcHideNegativeMargin.addEventListener("change", () => {
+    config.hideNegativeMargin = qcHideNegativeMargin.checked;
+    saveConfig();
+    renderDetalle();
+  });
+}
+
+// CONFIG TAB
+
+if (confMaxFilas) {
+  confMaxFilas.addEventListener("change", () => {
+    const v = parseInt(confMaxFilas.value, 10);
+    if (!isNaN(v) && v > 0) {
+      config.maxFilasDetalle = v;
+      saveConfig();
+      renderDetalle();
+    }
+  });
+}
+
+if (confResaltarNegativos) {
+  confResaltarNegativos.addEventListener("change", () => {
+    config.resaltarNegativos = confResaltarNegativos.checked;
+    saveConfig();
+    renderDetalle();
+  });
+}
+
+if (confGuardarVista) {
+  confGuardarVista.addEventListener("change", () => {
+    config.guardarVista = confGuardarVista.checked;
+    saveConfig();
+  });
+}
+
+if (confReset) {
+  confReset.addEventListener("click", () => {
+    config = {
+      mainMetric: "ventas",
+      chartType: "bar",
+      tableMode: "compact",
+      hideNegativeMargin: false,
+      maxFilasDetalle: 5000,
+      resaltarNegativos: true,
+      guardarVista: true,
+      expDimension: "mes",
+      expMetrica: "subtotal",
+      expChartType: "bar",
+      expExcluirNegativos: true
+    };
+    saveConfig();
+    applyConfigToUI();
+    actualizarTodo();
+  });
+}
+
+// ==================== EXPLORADOR DE GRÁFICOS ====================
+
+function actualizarExplorador() {
+  const canvas = document.getElementById("exp-chart");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  const data = filtrarRecords(false);
+  if (!data.length) return;
+
+  const dimension = config.expDimension;
+  const metrica = config.expMetrica;
+  const chartType = config.expChartType;
+  const excluirNeg = config.expExcluirNegativos;
+
+  const grupos = {};
+
+  function keyAndLabel(r) {
+    if (dimension === "mes") {
+      const idx = r.mes - 1;
+      const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+      return { key: r.mes, label: meses[idx] || r.mes };
+    }
+    if (dimension === "almacen") {
+      const k = r.almacen || "(sin)";
+      return { key: k, label: k };
+    }
+    if (dimension === "categoria") {
+      const k = r.categoria || "(Sin categoría)";
+      return { key: k, label: k };
+    }
+    if (dimension === "vendedor") {
+      const k = r.vendedor || "(Sin vendedor)";
+      return { key: k, label: k };
+    }
+    if (dimension === "cliente") {
+      const k = r.cliente || "(Sin cliente)";
+      return { key: k, label: k };
+    }
+    return { key: "otros", label: "Otros" };
+  }
+
+  const opsSet = {};
+
+  data.forEach(r => {
+    const { key, label } = keyAndLabel(r);
+    if (!grupos[key]) {
+      grupos[key] = {
+        label,
+        ventas: 0,
+        utilidad: 0,
+        ventasCred: 0,
+        ventasTot: 0
+      };
+      opsSet[key] = new Set();
+    }
+    grupos[key].ventas += r.subtotal;
+    if (r.incluirUtilidad) grupos[key].utilidad += r.utilidad;
+    if (r.esCredito) grupos[key].ventasCred += r.subtotal;
+    grupos[key].ventasTot += r.subtotal;
+
+    const opKey = r.origen + "|" + r.folio;
+    opsSet[key].add(opKey);
+  });
+
+  const items = Object.keys(grupos).map(k => {
+    const g = grupos[k];
+    let valor = 0;
+    if (metrica === "subtotal") valor = g.ventas;
+    else if (metrica === "utilidad") valor = g.utilidad;
+    else if (metrica === "margen")
+      valor = g.ventas > 0 ? g.utilidad / g.ventas : 0;
+    else if (metrica === "ops")
+      valor = opsSet[k].size;
+    else if (metrica === "cred_pct")
+      valor = g.ventasTot > 0 ? g.ventasCred / g.ventasTot : 0;
+    return { key: k, label: g.label, valor };
+  });
+
+  let filtrados = items;
+  if (excluirNeg && (metrica === "margen" || metrica === "cred_pct")) {
+    filtrados = items.filter(i => i.valor >= 0);
+  }
+
+  filtrados.sort((a, b) => b.valor - a.valor);
+
+  const labels = filtrados.map(i => i.label);
+  const valores = filtrados.map(i => i.valor);
+
+  if (expChart) expChart.destroy();
+  expChart = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels,
+      datasets: [{
+        label:
+          metrica === "subtotal" ? "Ventas" :
+          metrica === "utilidad" ? "Utilidad" :
+          metrica === "margen" ? "Margen %" :
+          metrica === "ops" ? "Operaciones" :
+          "% Crédito",
+        data: valores
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed;
+              if (metrica === "subtotal" || metrica === "utilidad") return formatCurrency(v);
+              if (metrica === "margen" || metrica === "cred_pct") return formatPercent(v);
+              return v.toLocaleString("es-MX");
+            }
+          }
+        }
+      },
+      scales: chartType === "pie" || chartType === "doughnut" ? {} : {
+        y: {
+          ticks: {
+            callback: v => {
+              if (metrica === "subtotal" || metrica === "utilidad") return formatCurrency(v);
+              if (metrica === "margen" || metrica === "cred_pct") return formatPercent(v);
+              return v.toLocaleString("es-MX");
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (expChartTitle) {
+    const dimTxt = {
+      mes: "Mes",
+      almacen: "Almacén",
+      categoria: "Categoría",
+      vendedor: "Vendedor",
+      cliente: "Cliente"
+    }[dimension] || "Dimensión";
+
+    const metTxt = {
+      subtotal: "Ventas (Subtotal)",
+      utilidad: "Utilidad bruta",
+      margen: "Margen %",
+      ops: "Número de operaciones",
+      cred_pct: "% Ventas a crédito"
+    }[metrica] || "Métrica";
+
+    expChartTitle.textContent = `${metTxt} por ${dimTxt}`;
+  }
+}
+
+// eventos explorador
+
+if (expDimensionSel) {
+  expDimensionSel.addEventListener("change", () => {
+    config.expDimension = expDimensionSel.value;
+    saveConfig();
+    actualizarExplorador();
+  });
+}
+if (expMetricaSel) {
+  expMetricaSel.addEventListener("change", () => {
+    config.expMetrica = expMetricaSel.value;
+    saveConfig();
+    actualizarExplorador();
+  });
+}
+if (expChartTypeSel) {
+  expChartTypeSel.addEventListener("change", () => {
+    config.expChartType = expChartTypeSel.value;
+    saveConfig();
+    actualizarExplorador();
+  });
+}
+if (expExcluirNegSel) {
+  expExcluirNegSel.addEventListener("change", () => {
+    config.expExcluirNegativos = expExcluirNegSel.checked;
+    saveConfig();
+    actualizarExplorador();
+  });
+}
