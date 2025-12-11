@@ -15,6 +15,8 @@ body {
   padding: 16px 24px 32px;
 }
 
+/* HEADER */
+
 .app-header {
   display: flex;
   justify-content: space-between;
@@ -58,6 +60,8 @@ body {
   color: #94a3b8;
 }
 
+/* FILTROS SUPERIORES */
+
 .filters-bar {
   display: flex;
   flex-wrap: wrap;
@@ -91,7 +95,7 @@ body {
   color: #e2e8f0;
 }
 
-/* Tabs */
+/* TABS */
 
 .tabs {
   display: flex;
@@ -126,7 +130,7 @@ body {
   display: block;
 }
 
-/* KPI cards */
+/* KPIs */
 
 .kpi-grid {
   display: grid;
@@ -160,7 +164,7 @@ body {
   color: #93c5fd;
 }
 
-/* Charts */
+/* GRÁFICAS */
 
 .charts-grid {
   display: grid;
@@ -176,7 +180,7 @@ body {
   border: 1px solid #1e293b;
 }
 
-/* Tables */
+/* TABLAS */
 
 .tables-grid {
   display: grid;
@@ -232,7 +236,7 @@ td {
   color: #f97373;
 }
 
-/* Pills crecimiento */
+/* PASTILLAS YOY */
 
 .pill {
   display: inline-flex;
@@ -258,7 +262,7 @@ td {
   color: #cbd5e1;
 }
 
-/* Detalle */
+/* DETALLE */
 
 .detalle-header {
   display: flex;
@@ -276,32 +280,6 @@ td {
   color: #e2e8f0;
 }
 
-.chips-wrapper {
-  margin-bottom: 8px;
-}
-
-.chips-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip {
-  border-radius: 999px;
-  border: 1px solid #334155;
-  background: #020617;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  color: #cbd5f5;
-}
-
-.chip.selected {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-  color: #e5f3ff;
-}
-
 .filter-input {
   width: 100%;
   padding: 3px 6px;
@@ -312,7 +290,7 @@ td {
   font-size: 11px;
 }
 
-/* Modal */
+/* MODAL */
 
 .modal-backdrop {
   position: fixed;
@@ -352,6 +330,8 @@ td {
   cursor: pointer;
   font-size: 18px;
 }
+
+/* OTROS */
 
 .error {
   color: #f87171;
