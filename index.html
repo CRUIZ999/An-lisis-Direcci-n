@@ -7,10 +7,12 @@
 
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- SheetJS para leer Excel -->
+  <!-- SheetJS para leer y generar Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Chart.js para gráficas -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- jsPDF para exportar PDFs desde las gráficas -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -31,7 +33,7 @@
       </div>
     </header>
 
-    <!-- FILTROS SUPERIORES FIJOS -->
+    <!-- FILTROS SUPERIORES -->
     <section class="filters-bar">
       <div class="filter-group">
         <label for="filter-year">Año:</label>
@@ -67,7 +69,13 @@
     <nav class="tabs">
       <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
       <button class="tab-btn" data-tab="tab-yoy">Comparativo YoY</button>
+      <button class="tab-btn" data-tab="tab-sucursal">Análisis por sucursal</button>
+      <button class="tab-btn" data-tab="tab-credito">Crédito vs contado</button>
+      <button class="tab-btn" data-tab="tab-categorias">Categorías</button>
+      <button class="tab-btn" data-tab="tab-vendedores">Vendedores</button>
+      <button class="tab-btn" data-tab="tab-clientes">Clientes</button>
       <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
+      <button class="tab-btn" data-tab="tab-explorer">Explorador de gráficos</button>
     </nav>
 
     <!-- TAB 1: RESUMEN -->
@@ -112,11 +120,25 @@
 
       <section class="charts-grid">
         <div class="chart-card">
-          <h3>Ventas por mes</h3>
+          <div class="chart-card-header">
+            <h3>Ventas por mes</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('mensual')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('mensual', 'Ventas por mes')">⬇ PDF</button>
+            </div>
+          </div>
+          <p class="muted">Pasa el mouse para ver detalle, haz clic en un mes para ver desglose por categoría.</p>
           <canvas id="chart-mensual"></canvas>
         </div>
         <div class="chart-card">
-          <h3>Ventas y ventas por m² por almacén</h3>
+          <div class="chart-card-header">
+            <h3>Ventas y ventas por m² por almacén</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('almacen')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('almacen', 'Ventas por almacén')">⬇ PDF</button>
+            </div>
+          </div>
+          <p class="muted">Haz clic en un almacén para aplicar el filtro global.</p>
           <canvas id="chart-almacen"></canvas>
         </div>
       </section>
@@ -160,7 +182,7 @@
     <main id="tab-yoy" class="tab-panel">
       <p class="muted">
         Comparación del último año vs el anterior aplicando los filtros de almacén, tipo de factura y categoría.
-        El filtro de año se ignora en esta vista. Haz clic en una métrica para ver detalle.
+        El filtro de año se ignora en esta vista. Haz clic en una métrica para ver detalle, y luego en una categoría para ir al detalle.
       </p>
       <div class="table-card">
         <table>
@@ -177,11 +199,199 @@
       </div>
     </main>
 
-    <!-- TAB 3: DETALLE -->
+    <!-- TAB 3: ANÁLISIS POR SUCURSAL -->
+    <main id="tab-sucursal" class="tab-panel">
+      <p class="muted">
+        Vista comparativa de sucursales. Ignora el filtro de almacén para mostrar todas, respetando año, tipo de factura y categoría.
+      </p>
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Ventas por sucursal</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('sucursal')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('sucursal', 'Ventas por sucursal')">⬇ PDF</button>
+            </div>
+          </div>
+          <canvas id="chart-sucursal"></canvas>
+        </div>
+        <div class="table-card">
+          <h3>Indicadores por sucursal</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Almacén</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+                <th class="text-right">Ventas/m²</th>
+                <th class="text-right">Transacciones</th>
+                <th class="text-right">Clientes</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-sucursal"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 4: CRÉDITO VS CONTADO -->
+    <main id="tab-credito" class="tab-panel">
+      <p class="muted">
+        Distribución de ventas entre contado y crédito en el contexto de los filtros actuales.
+      </p>
+      <section class="kpi-grid" id="kpi-credito-grid">
+        <article class="kpi-card">
+          <h3>Ventas contado</h3>
+          <div id="kpi-contado-ventas" class="kpi-main">$0</div>
+          <p id="kpi-contado-margen" class="kpi-sub">Margen: 0.0%</p>
+        </article>
+        <article class="kpi-card">
+          <h3>Ventas crédito</h3>
+          <div id="kpi-credito-ventas" class="kpi-main">$0</div>
+          <p id="kpi-credito-margen" class="kpi-sub">Margen: 0.0%</p>
+        </article>
+        <article class="kpi-card">
+          <h3>% de ventas a crédito</h3>
+          <div id="kpi-credito-pct" class="kpi-main">0.0%</div>
+          <p class="kpi-sub">Sobre el total de ventas</p>
+        </article>
+      </section>
+
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Mix contado vs crédito</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('creditoMix')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('creditoMix', 'Mix contado vs crédito')">⬇ PDF</button>
+            </div>
+          </div>
+          <canvas id="chart-credito-mix"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Evolución mensual por tipo</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('creditoMensual')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('creditoMensual', 'Crédito vs contado mensual')">⬇ PDF</button>
+            </div>
+          </div>
+          <canvas id="chart-credito-mensual"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 5: CATEGORÍAS -->
+    <main id="tab-categorias" class="tab-panel">
+      <p class="muted">
+        Rendimiento por categoría en el contexto de los filtros actuales.
+      </p>
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Top categorías por ventas</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('categorias')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('categorias', 'Top categorías')">⬇ PDF</button>
+            </div>
+          </div>
+          <canvas id="chart-categorias"></canvas>
+        </div>
+        <div class="table-card">
+          <h3>Detalle de categorías</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+                <th class="text-right">% del total</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-categorias"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 6: VENDEDORES -->
+    <main id="tab-vendedores" class="tab-panel">
+      <p class="muted">
+        Desempeño por vendedor en el contexto de los filtros actuales.
+      </p>
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Top vendedores por ventas</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('vendedores')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('vendedores', 'Top vendedores')">⬇ PDF</button>
+            </div>
+          </div>
+          <canvas id="chart-vendedores"></canvas>
+        </div>
+        <div class="table-card">
+          <h3>Detalle de vendedores</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Vendedor</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+                <th class="text-right">Operaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-vendedores-detalle"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 7: CLIENTES -->
+    <main id="tab-clientes" class="tab-panel">
+      <p class="muted">
+        Análisis de clientes (Top, participación y márgenes) en el contexto de los filtros actuales.
+      </p>
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Top clientes por ventas</h3>
+            <div class="chart-actions">
+              <button type="button" onclick="descargarGraficaPNG('clientes')">⬇ PNG</button>
+              <button type="button" onclick="descargarGraficaPDF('clientes', 'Top clientes')">⬇ PDF</button>
+            </div>
+          </div>
+          <canvas id="chart-clientes"></canvas>
+        </div>
+        <div class="table-card">
+          <h3>Detalle de clientes</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+                <th class="text-right">Operaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-clientes-detalle"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 8: DETALLE -->
     <main id="tab-detalle" class="tab-panel">
       <div class="detalle-header">
         <label for="search-global">Buscar (cliente / producto / factura):</label>
         <input id="search-global" type="text" placeholder="Escribe texto para filtrar..." />
+        <button id="btn-export-detalle" type="button" class="btn-primary">
+          ⬇ Exportar a Excel
+        </button>
       </div>
 
       <div class="table-card wide">
@@ -194,28 +404,104 @@
         </table>
       </div>
     </main>
-  </div>
 
-  <!-- MODAL YOY -->
-  <div id="modal-backdrop" class="modal-backdrop">
-    <div class="modal">
-      <header class="modal-header">
-        <h2 id="modal-title">Detalle</h2>
-        <button id="modal-close" class="modal-close">✕</button>
-      </header>
-      <p id="modal-sub" class="muted"></p>
-      <div class="table-card">
-        <table id="modal-table">
-          <thead>
-            <tr>
-              <th>Categoría / Almacén</th>
-              <th id="modal-year-prev" class="text-right">Año N-1</th>
-              <th id="modal-year-current" class="text-right">Año N</th>
-              <th class="text-right">Crecimiento %</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+    <!-- TAB 9: EXPLORADOR DE GRÁFICOS -->
+    <main id="tab-explorer" class="tab-panel">
+      <div class="explorer-layout">
+        <!-- Panel de controles -->
+        <aside class="explorer-controls">
+          <h3>Configuración del gráfico</h3>
+
+          <div class="filter-group">
+            <label for="explorer-dimension">Dimensión (eje X):</label>
+            <select id="explorer-dimension"></select>
+          </div>
+
+          <div class="filter-group">
+            <label for="explorer-metric">Métrica:</label>
+            <select id="explorer-metric"></select>
+          </div>
+
+          <div class="filter-group">
+            <label for="explorer-type">Tipo de gráfico:</label>
+            <select id="explorer-type"></select>
+          </div>
+
+          <div class="filter-group">
+            <label for="explorer-top">Límite de elementos:</label>
+            <select id="explorer-top"></select>
+          </div>
+
+          <hr class="explorer-separator" />
+
+          <h4>Vistas guardadas</h4>
+
+          <div class="filter-group">
+            <label for="explorer-view-name">Nombre de la vista:</label>
+            <input
+              id="explorer-view-name"
+              type="text"
+              placeholder="Ej. Ventas por categoría"
+            />
+          </div>
+
+          <button
+            id="explorer-save-view"
+            type="button"
+            class="btn-primary"
+          >
+            💾 Guardar vista
+          </button>
+
+          <div class="filter-group">
+            <label for="explorer-saved-views">Cargar vista:</label>
+            <select id="explorer-saved-views">
+              <option value="">Vistas guardadas...</option>
+            </select>
+          </div>
+
+          <p class="muted">
+            Tip: haz clic en una barra para aplicar filtros o ir al detalle.
+          </p>
+        </aside>
+
+        <!-- Área de gráfico -->
+        <section class="explorer-chart-area">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3 id="explorer-title">Gráfico dinámico</h3>
+              <div class="chart-actions">
+                <button type="button" onclick="descargarGraficaPNG('explorer')">⬇ PNG</button>
+                <button type="button" onclick="descargarGraficaPDF('explorer', 'Explorador de gráficos')">⬇ PDF</button>
+              </div>
+            </div>
+            <canvas id="chart-explorer"></canvas>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- MODAL YOY / DETALLES -->
+    <div id="modal-backdrop" class="modal-backdrop">
+      <div class="modal">
+        <header class="modal-header">
+          <h2 id="modal-title">Detalle</h2>
+          <button id="modal-close" class="modal-close">✕</button>
+        </header>
+        <p id="modal-sub" class="muted"></p>
+        <div class="table-card">
+          <table id="modal-table">
+            <thead>
+              <tr>
+                <th>Categoría / Almacén</th>
+                <th id="modal-year-prev" class="text-right">Año N-1</th>
+                <th id="modal-year-current" class="text-right">Año N</th>
+                <th class="text-right">Crecimiento %</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
