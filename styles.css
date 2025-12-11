@@ -98,22 +98,35 @@ body {
 /* BARRA DE CONFIGURACIÓN RÁPIDA */
 
 .quick-config {
-  margin: 10px 0 8px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid #1e293b;
-  background: #020617;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #020617;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
 }
 
 .qc-group {
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  min-width: 180px;
+}
+
+.qc-group-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.qc-group label,
+.qc-group-inline label {
+  color: #cbd5f5;
 }
 
 .qc-group select {
@@ -125,19 +138,8 @@ body {
   font-size: 12px;
 }
 
-.qc-group-inline {
-  justify-content: flex-end;
-}
-
-.qc-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
 .qc-checkbox input {
-  accent-color: #38bdf8;
+  margin-right: 6px;
 }
 
 /* TABS */
@@ -325,6 +327,63 @@ td {
   color: #e2e8f0;
 }
 
+/* Paleta de columnas */
+
+.detalle-palette {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #020617;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+}
+
+.detalle-palette-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #020617;
+  font-size: 11px;
+  cursor: grab;
+  user-select: none;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.chip:hover {
+  border-color: #38bdf8;
+  transform: scale(0.97);
+}
+
+.chip.active {
+  opacity: 0.35;
+}
+
+/* tabla detalle */
+
+.detalle-table tbody tr {
+  cursor: pointer;
+}
+
+.detalle-table tbody tr:hover {
+  background: rgba(15,23,42,0.9);
+}
+
 .filter-input {
   width: 100%;
   padding: 3px 6px;
@@ -335,73 +394,33 @@ td {
   font-size: 11px;
 }
 
-/* DETALLE – CONFIGURADOR DE COLUMNAS */
+.sortable {
+  cursor: pointer;
+}
 
-.detalle-config {
+.sortable span {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Configuración detalle */
+
+.detail-config {
   margin-bottom: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #1e293b;
-  background: #020617;
-}
-
-.detalle-config-text {
-  margin-bottom: 8px;
-}
-
-.chip-container {
+  padding-bottom: 4px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 8px 24px;
+  align-items: center;
 }
 
-.chip {
-  border: 1px solid #1d4ed8;
+.detail-config .filter-group input[type="number"] {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid #334155;
   background: #020617;
   color: #e2e8f0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  cursor: grab;
-  user-select: none;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-}
-
-.chip:hover {
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.08);
-}
-
-.chip:active {
-  cursor: grabbing;
-  transform: scale(0.97);
-}
-
-.chip.dragging {
-  opacity: 0.5;
-}
-
-/* Encabezados que aceptan drop */
-
-th.th-drop-target {
-  position: relative;
-}
-
-th.th-drop-target.drag-over {
-  outline: 1px dashed #38bdf8;
-  background: rgba(15, 23, 42, 0.8);
-}
-
-th.th-drop-target .th-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-th.th-drop-target .th-label span.helper {
-  font-size: 10px;
-  opacity: 0.6;
+  width: 140px;
 }
 
 /* MODAL */
@@ -445,28 +464,27 @@ th.th-drop-target .th-label span.helper {
   font-size: 18px;
 }
 
-.modal-toolbar {
+/* Acciones del modal de factura */
+
+.modal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 6px 0 10px;
+  margin: 8px 0 12px;
 }
 
-/* Botones genéricos */
-
-.btn {
+.pill-btn {
   border-radius: 999px;
-  border: 1px solid #334155;
+  border: 1px solid #1e293b;
   background: #020617;
   color: #e2e8f0;
-  font-size: 11px;
   padding: 4px 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
-.btn:hover {
+.pill-btn:hover {
   background: #0f172a;
-  border-color: #38bdf8;
 }
 
 /* OTROS */
@@ -483,10 +501,14 @@ th.th-drop-target .th-label span.helper {
   margin: 4px 0 10px;
 }
 
-.sortable {
+.clickable-row {
   cursor: pointer;
 }
-.sortable span {
-  font-size: 10px;
-  opacity: 0.7;
+
+/* modo tabla */
+
+body.table-comfortable .detalle-table th,
+body.table-comfortable .detalle-table td {
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
