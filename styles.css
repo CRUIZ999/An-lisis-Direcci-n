@@ -76,7 +76,7 @@ body {
 }
 
 .filter-group {
-  min-width: 200px;
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -99,6 +99,7 @@ body {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 16px 0 8px;
   border-bottom: 1px solid #1e293b;
@@ -110,7 +111,7 @@ body {
   color: #94a3b8;
   padding: 8px 16px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   border-radius: 999px 999px 0 0;
 }
 
@@ -180,6 +181,41 @@ body {
   border: 1px solid #1e293b;
 }
 
+.chart-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.chart-card-header h3 {
+  margin: 0;
+}
+
+.chart-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.chart-actions button {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chart-actions button:hover {
+  background: #1e293b;
+}
+
+.chart-card canvas {
+  cursor: crosshair;
+}
+
 /* TABLAS */
 
 .tables-grid {
@@ -226,6 +262,14 @@ th {
 
 td {
   color: #e2e8f0;
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.75);
+}
+
+tbody tr:hover {
+  background: rgba(30, 64, 175, 0.3);
 }
 
 .text-right {
@@ -351,4 +395,70 @@ td {
 .sortable span {
   font-size: 10px;
   opacity: 0.7;
+}
+
+/* Botón primario reutilizable */
+
+.btn-primary {
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #3b82f6;
+  background: #1d4ed8;
+  color: #e5f0ff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+/* EXPLORADOR DE GRÁFICOS */
+
+.explorer-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.explorer-controls {
+  width: 260px;
+  min-width: 240px;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 12px 14px;
+  position: sticky;
+  top: 64px;
+}
+
+.explorer-controls h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.explorer-controls h4 {
+  margin-top: 12px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.explorer-controls input {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+hr.explorer-separator {
+  border: none;
+  border-top: 1px solid #1e293b;
+  margin: 10px 0;
+}
+
+.explorer-chart-area {
+  flex: 1;
 }
