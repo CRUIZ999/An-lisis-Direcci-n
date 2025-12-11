@@ -1,452 +1,404 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <title>Dashboard de Ventas – El Cedro</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="styles.css" />
+* { box-sizing: border-box; }
 
-  <!-- SheetJS -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #050814;
+  color: #f5f5f5;
+}
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 24px 32px;
+}
 
-  <!-- html2canvas (para exportar imagen/PDF) -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+/* HEADER */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 16px;
+}
 
-  <!-- jsPDF -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-</head>
+.title-block h1 { margin: 0 0 4px; }
+.subtitle { margin: 0; color: #aab2c5; }
 
-<body>
-  <div class="app">
-    <!-- HEADER -->
-    <header class="app-header">
-      <div class="title-block">
-        <h1>Dashboard de Ventas</h1>
-        <p class="subtitle">
-          Carga un archivo Excel (hojas <strong>facturas</strong> y <strong>notas</strong>) para analizar ventas, utilidad, márgenes y detalle por factura.
-        </p>
-      </div>
+.file-block { text-align: right; }
 
-      <div class="file-block">
-        <label class="file-label">
-          <input id="file-input" type="file" accept=".xlsx,.xls" />
-          <span>📂 Cargar archivo Excel</span>
-        </label>
-        <div id="file-name" class="file-name">Ningún archivo seleccionado</div>
-      </div>
-    </header>
+.file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #1e293b;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid #334155;
+  font-size: 14px;
+}
 
-    <!-- FILTROS SUPERIORES -->
-    <section class="filters-bar">
-      <div class="filter-group">
-        <label for="filter-year">Año:</label>
-        <select id="filter-year" disabled>
-          <option>Todos los años</option>
-        </select>
-      </div>
+.file-label input { display: none; }
 
-      <div class="filter-group">
-        <label for="filter-store">Almacén:</label>
-        <select id="filter-store" disabled>
-          <option>Todos los almacenes</option>
-        </select>
-      </div>
+.file-name {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
 
-      <div class="filter-group">
-        <label for="filter-type">Tipo de factura:</label>
-        <select id="filter-type" disabled>
-          <option value="both">Contado + Crédito</option>
-          <option value="contado">Solo contado</option>
-          <option value="credito">Solo crédito</option>
-        </select>
-      </div>
+/* FILTROS */
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #020617;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
 
-      <div class="filter-group">
-        <label for="filter-category">Categoría:</label>
-        <select id="filter-category" disabled>
-          <option>Todas las categorías</option>
-        </select>
-      </div>
+.filter-group {
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
 
-      <div class="filter-group filter-inline">
-        <label class="inline">
-          <input id="toggle-negativos" type="checkbox" />
-          Resaltar negativos
-        </label>
-      </div>
+.filter-group label { color: #cbd5f5; }
 
-      <div class="filter-group filter-inline">
-        <button id="btn-reset" class="btn">Reset vista</button>
-      </div>
-    </section>
+.filter-group select, .filter-group input {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e2e8f0;
+}
 
-    <div id="error" class="error"></div>
+/* CONFIG RÁPIDA */
+.quick-config {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
 
-    <!-- TABS -->
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
-      <button class="tab-btn" data-tab="tab-yoy">Comparativo YoY</button>
-      <button class="tab-btn" data-tab="tab-credito">Crédito vs Contado</button>
-      <button class="tab-btn" data-tab="tab-categorias">Categorías</button>
-      <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
-      <button class="tab-btn" data-tab="tab-explorador">Explorador de gráficos</button>
-      <button class="tab-btn" data-tab="tab-config">Configuración</button>
-    </nav>
+.qc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  min-width: 180px;
+}
 
-    <!-- TAB 1: RESUMEN -->
-    <main id="tab-resumen" class="tab-panel active">
-      <section class="kpi-grid">
-        <article class="kpi-card">
-          <h3>Ventas</h3>
-          <div id="kpi-ventas" class="kpi-main">$0</div>
-          <p id="kpi-ventas-sub" class="kpi-sub">Periodo: —</p>
-        </article>
+.qc-group label { color: #cbd5f5; }
 
-        <article class="kpi-card">
-          <h3>Utilidad bruta</h3>
-          <div id="kpi-utilidad" class="kpi-main">$0</div>
-          <p id="kpi-utilidad-sub" class="kpi-sub">—</p>
-        </article>
+.qc-group select {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e2e8f0;
+}
 
-        <article class="kpi-card">
-          <h3>Margen bruto %</h3>
-          <div id="kpi-margen" class="kpi-main">0.0%</div>
-          <p id="kpi-margen-sub" class="kpi-sub">—</p>
-        </article>
+.qc-inline { min-width: auto; flex-direction: row; align-items: center; gap: 10px; }
 
-        <article class="kpi-card">
-          <h3>Ventas por m²</h3>
-          <div id="kpi-m2" class="kpi-main">$0/m²</div>
-          <p id="kpi-m2-sub" class="kpi-sub">—</p>
-        </article>
+.qc-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #e2e8f0;
+  user-select: none;
+}
+.qc-checkbox input { accent-color: #38bdf8; }
 
-        <article class="kpi-card">
-          <h3>Transacciones</h3>
-          <div id="kpi-trans" class="kpi-main">0</div>
-          <p class="kpi-sub">Facturas + notas (únicas)</p>
-        </article>
+/* TABS */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 8px;
+  border-bottom: 1px solid #1e293b;
+}
 
-        <article class="kpi-card">
-          <h3>Clientes únicos</h3>
-          <div id="kpi-clientes" class="kpi-main">0</div>
-          <p class="kpi-sub">En el periodo filtrado</p>
-        </article>
-      </section>
+.tab-btn {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 999px 999px 0 0;
+}
 
-      <section class="charts-grid" id="resumen-export-area">
-        <div class="chart-card">
-          <div class="card-head">
-            <h3>Ventas por mes</h3>
-            <button class="btn btn-mini" data-export-canvas="chart-mensual">Exportar PNG</button>
-          </div>
-          <canvas id="chart-mensual"></canvas>
-        </div>
+.tab-btn.active {
+  background: #020617;
+  color: #f9fafb;
+  border: 1px solid #1e293b;
+  border-bottom-color: transparent;
+}
 
-        <div class="chart-card">
-          <div class="card-head">
-            <h3>Ventas y ventas por m² por almacén</h3>
-            <button class="btn btn-mini" data-export-canvas="chart-almacen">Exportar PNG</button>
-          </div>
-          <canvas id="chart-almacen"></canvas>
-        </div>
-      </section>
+.tab-panel { display: none; padding-top: 8px; }
+.tab-panel.active { display: block; }
 
-      <section class="tables-grid">
-        <div class="table-card">
-          <h3>Top 5 clientes por ventas</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Cliente</th>
-                <th class="text-right">Ventas</th>
-                <th class="text-right">Utilidad</th>
-                <th class="text-right">Margen %</th>
-              </tr>
-            </thead>
-            <tbody id="tabla-top-clientes"></tbody>
-          </table>
-        </div>
+/* KPI */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
 
-        <div class="table-card">
-          <h3>Top 5 vendedores por ventas</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Vendedor</th>
-                <th class="text-right">Ventas</th>
-                <th class="text-right">Utilidad</th>
-                <th class="text-right">Operaciones</th>
-              </tr>
-            </thead>
-            <tbody id="tabla-top-vendedores"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
+.kpi-card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: radial-gradient(circle at top left, #1d2a3f, #020617);
+  border: 1px solid #1e293b;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
 
-    <!-- TAB 2: YOY -->
-    <main id="tab-yoy" class="tab-panel">
-      <p class="muted">
-        Comparación del último año vs el anterior aplicando filtros de almacén, tipo de factura y categoría.
-        El filtro de año se ignora en esta vista. Haz clic en una métrica para ver detalle por categoría.
-      </p>
-      <div class="table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Métrica</th>
-              <th id="th-year-prev" class="text-right">Año N-1</th>
-              <th id="th-year-current" class="text-right">Año N</th>
-              <th class="text-right">Crecimiento %</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-yoy"></tbody>
-        </table>
-      </div>
-    </main>
+.kpi-card h3 { margin: 0 0 8px; font-size: 15px; }
 
-    <!-- TAB 3: CRÉDITO VS CONTADO -->
-    <main id="tab-credito" class="tab-panel">
-      <p class="muted">
-        Si no seleccionas año, se usa el último año disponible. Click en barras para enviar a Detalle filtrado por tipo.
-      </p>
+.kpi-main { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.kpi-sub { margin: 0; font-size: 12px; color: #93c5fd; }
 
-      <section class="charts-grid">
-        <div class="chart-card">
-          <div class="card-head">
-            <h3>Ventas contado vs crédito por mes</h3>
-            <button class="btn btn-mini" data-export-canvas="chart-credito">Exportar PNG</button>
-          </div>
-          <canvas id="chart-credito"></canvas>
-        </div>
-      </section>
+/* GRÁFICAS */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
 
-      <section class="table-card">
-        <h3>Detalle mensual contado vs crédito</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Mes</th>
-              <th class="text-right">Contado</th>
-              <th class="text-right">Crédito</th>
-              <th class="text-right">Total</th>
-              <th class="text-right">% Crédito</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-credito"></tbody>
-        </table>
-      </section>
-    </main>
+.chart-card {
+  padding: 16px;
+  background: #020617;
+  border-radius: 16px;
+  border: 1px solid #1e293b;
+}
 
-    <!-- TAB 4: CATEGORÍAS -->
-    <main id="tab-categorias" class="tab-panel">
-      <p class="muted">
-        Vista por categoría (ventas, utilidad, margen y % crédito). Click en una barra o fila → Detalle filtrado por esa categoría.
-      </p>
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.card-head h3 { margin: 0; }
+.card-actions { display: flex; gap: 8px; }
 
-      <section class="charts-grid">
-        <div class="chart-card">
-          <div class="card-head">
-            <h3>Top categorías por ventas</h3>
-            <button class="btn btn-mini" data-export-canvas="chart-categorias">Exportar PNG</button>
-          </div>
-          <canvas id="chart-categorias"></canvas>
-        </div>
-      </section>
+/* TABLAS */
+.tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
 
-      <section class="table-card">
-        <h3>Detalle por categoría</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Categoría</th>
-              <th class="text-right">Ventas</th>
-              <th class="text-right">Utilidad</th>
-              <th class="text-right">Margen %</th>
-              <th class="text-right">% Crédito</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-categorias"></tbody>
-        </table>
-      </section>
-    </main>
+.table-card {
+  padding: 16px;
+  background: #020617;
+  border-radius: 16px;
+  border: 1px solid #1e293b;
+}
 
-    <!-- TAB 5: DETALLE -->
-    <main id="tab-detalle" class="tab-panel">
-      <div class="detalle-header">
-        <label for="search-global">Buscar (cliente / producto / factura):</label>
-        <input id="search-global" type="text" placeholder="Escribe texto para filtrar..." />
-      </div>
+.table-card.wide { margin-top: 16px; }
 
-      <section class="table-card wide">
-        <div class="detalle-config-head">
-          <div>
-            <h3>Encabezados disponibles</h3>
-            <p class="muted">Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas de la tabla.</p>
-          </div>
-          <div class="detalle-config-right">
-            <span class="muted">Tabla con 7 columnas</span>
-          </div>
-        </div>
+.table-card h3 { margin-top: 0; margin-bottom: 8px; }
 
-        <div id="detalle-chips" class="chip-container"></div>
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
 
-        <table>
-          <thead>
-            <tr id="detalle-header-row"></tr>
-            <tr id="detalle-filter-row"></tr>
-          </thead>
-          <tbody id="tabla-detalle"></tbody>
-        </table>
-      </section>
-    </main>
+thead tr { background: #020617; }
 
-    <!-- TAB 6: EXPLORADOR -->
-    <main id="tab-explorador" class="tab-panel">
-      <section class="quick-config">
-        <div class="qc-group">
-          <label>Dimensión</label>
-          <select id="exp-dimension"></select>
-        </div>
-        <div class="qc-group">
-          <label>Métrica</label>
-          <select id="exp-metrica"></select>
-        </div>
-        <div class="qc-group">
-          <label>Tipo</label>
-          <select id="exp-tipo"></select>
-        </div>
-        <div class="qc-group qc-inline">
-          <button id="exp-run" class="btn">Generar</button>
-          <button class="btn" id="exp-to-detalle">Ir a Detalle</button>
-        </div>
-      </section>
+th, td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1e293b;
+  vertical-align: top;
+}
 
-      <section class="chart-card">
-        <div class="card-head">
-          <h3 id="exp-title">Explorador</h3>
-          <button class="btn btn-mini" data-export-canvas="chart-explorador">Exportar PNG</button>
-        </div>
-        <canvas id="chart-explorador"></canvas>
-        <p class="muted">Click en una barra/segmento para mandar a Detalle filtrado por ese valor.</p>
-      </section>
+th { text-align: left; color: #cbd5f5; }
+td { color: #e2e8f0; }
 
-      <section class="table-card">
-        <h3>Tabla del explorador</h3>
-        <table>
-          <thead>
-            <tr>
-              <th id="exp-col-dim">Dimensión</th>
-              <th class="text-right" id="exp-col-met">Métrica</th>
-            </tr>
-          </thead>
-          <tbody id="exp-table"></tbody>
-        </table>
-      </section>
-    </main>
+.text-right { text-align: right; }
+.neg { color: #f97373; }
 
-    <!-- TAB 7: CONFIG -->
-    <main id="tab-config" class="tab-panel">
-      <section class="table-card">
-        <h3>Configuración</h3>
+.linkish {
+  color: #60a5fa;
+  text-decoration: underline;
+  cursor: pointer;
+}
 
-        <div class="config-grid">
-          <div class="config-item">
-            <label>Guardar vista actual</label>
-            <button id="btn-save-view" class="btn">Guardar en este navegador</button>
-            <p class="muted">Guarda filtros, layout de columnas, explorer y toggles.</p>
-          </div>
+/* PASTILLAS YOY */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
 
-          <div class="config-item">
-            <label>Exportar Resumen a PDF</label>
-            <button id="btn-export-resumen-pdf" class="btn">Exportar PDF</button>
-            <p class="muted">Genera PDF con KPIs + gráficas del resumen.</p>
-          </div>
+.pill.pos { background: rgba(22, 163, 74, 0.12); color: #4ade80; }
+.pill.neg { background: rgba(248, 113, 113, 0.12); color: #fca5a5; }
+.pill.neu { background: rgba(148, 163, 184, 0.12); color: #cbd5e1; }
 
-          <div class="config-item">
-            <label>Exportar tabla Detalle a Excel</label>
-            <button id="btn-export-detalle-xlsx" class="btn">Exportar XLSX</button>
-            <p class="muted">Exporta la tabla Detalle con las 7 columnas visibles y filtros aplicados.</p>
-          </div>
+/* DETALLE */
+.detalle-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
 
-          <div class="config-item">
-            <label>Limpiar vista guardada</label>
-            <button id="btn-clear-view" class="btn danger">Borrar vista</button>
-            <p class="muted">Elimina configuración guardada en localStorage.</p>
-          </div>
-        </div>
-      </section>
-    </main>
+.detalle-header input {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e2e8f0;
+}
 
-  </div>
+.filter-input {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  color: #e2e8f0;
+  font-size: 11px;
+}
 
-  <!-- MODAL YOY (detalle por categoría) -->
-  <div id="modal-yoy-backdrop" class="modal-backdrop">
-    <div class="modal">
-      <header class="modal-header">
-        <h2 id="modal-yoy-title">Detalle</h2>
-        <button id="modal-yoy-close" class="modal-close">✕</button>
-      </header>
-      <p id="modal-yoy-sub" class="muted"></p>
+.sortable { cursor: pointer; user-select: none; }
+.sortable span { font-size: 10px; opacity: 0.7; margin-left: 6px; }
 
-      <div class="table-card">
-        <table id="modal-yoy-table">
-          <thead>
-            <tr>
-              <th>Categoría</th>
-              <th id="modal-yoy-year-prev" class="text-right">Año N-1</th>
-              <th id="modal-yoy-year-cur" class="text-right">Año N</th>
-              <th class="text-right">Crecimiento %</th>
-            </tr>
-          </thead>
-          <tbody id="modal-yoy-body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+.detalle-config-text { margin-bottom: 8px; }
 
-  <!-- MODAL FACTURA (líneas/artículos) -->
-  <div id="modal-fact-backdrop" class="modal-backdrop">
-    <div class="modal">
-      <header class="modal-header">
-        <div>
-          <h2 id="modal-fact-title">Factura</h2>
-          <p id="modal-fact-sub" class="muted"></p>
-        </div>
-        <button id="modal-fact-close" class="modal-close">✕</button>
-      </header>
+.chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid #1e293b;
+  background: #050814;
+  margin-bottom: 10px;
+}
 
-      <div class="modal-toolbar">
-        <button id="modal-fact-to-detalle" class="btn">Ir a Detalle (filtrado)</button>
-        <button id="modal-fact-export-xlsx" class="btn">Exportar Excel</button>
-        <button id="modal-fact-export-pdf" class="btn">Exportar PDF</button>
-      </div>
+.chip {
+  border: 1px solid #1d4ed8;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+  white-space: nowrap;
+}
+.chip:hover { border-color: #38bdf8; background: rgba(56,189,248,0.08); }
+.chip:active { cursor: grabbing; transform: scale(0.98); }
 
-      <div class="table-card">
-        <table id="modal-fact-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Hora</th>
-              <th>Cliente</th>
-              <th>Descripción</th>
-              <th class="text-right">Cantidad</th>
-              <th class="text-right">Costo</th>
-              <th class="text-right">Precio s/IVA</th>
-              <th>Vendedor</th>
-            </tr>
-          </thead>
-          <tbody id="modal-fact-body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+.th-drop-target { position: relative; }
+.th-drop-target-over { outline: 2px dashed #38bdf8; outline-offset: -4px; }
 
-  <script src="app.js"></script>
-</body>
-</html>
+/* Explorador */
+.explorer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  margin-bottom: 12px;
+}
+
+/* Botones */
+.btn {
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e2e8f0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn:hover { border-color: #38bdf8; background: rgba(56,189,248,0.08); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* MODAL */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal-backdrop.active { display: flex; }
+
+.modal {
+  width: min(1100px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: #020617;
+  border-radius: 16px;
+  border: 1px solid #1e293b;
+  padding: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.modal-close {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.modal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 10px;
+}
+
+/* OTROS */
+.error { color: #f87171; margin-top: 8px; font-size: 12px; }
+.muted { color: #94a3b8; font-size: 12px; margin: 4px 0 10px; }
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.config-item label { display: block; margin-bottom: 6px; color: #cbd5f5; font-size: 13px; }
+.config-item input[type="number"] {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e2e8f0;
+}
