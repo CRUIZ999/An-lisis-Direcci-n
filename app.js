@@ -1,6 +1,8 @@
-// ----------------------------
-// CONFIGURACIÓN FIJA
-// ----------------------------
+// =======================================================
+//  CONFIGURACIÓN Y MAPEOS
+// =======================================================
+
+// m² por almacén
 const M2_POR_ALMACEN = {
   "GENERAL": 1538,
   "EXPRESS": 369,
@@ -10,57 +12,132 @@ const M2_POR_ALMACEN = {
   "Todas": 3225
 };
 
-// mapear nombres originales -> nombres comunes (no necesita ser exacto, se normaliza)
+// Mapear columnas originales -> nombre común (FACTURAS)
 const RENAME_FACTURAS = {
   "No_fac": "Factura",
   "Falta_fac": "Fecha",
+  "Status_fac": "Status_fac",
   "Descuento": "Descuento ($)",
   "Subt_fac": "Sub. Factura",
   "Total_fac": "Total Factura",
+  "Retiva_fac": "Retiva_fac",
+  "Retisrfac": "Retisrfac",
+  "Impto1": "Impto1",
+  "Impto2": "Impto2",
+  "Timpto1": "Timpto1",
+  "Timpto2": "Timpto2",
+  "Otrosimptos": "Otrosimptos",
   "Iva": "IVA",
+  "Saldo_fac": "Saldo_fac",
+  "Iva_prod": "Iva_prod",
+  "Ieps_prod": "Ieps_prod",
+  "Cve_factu": "Cve_factu",
   "Cve_cte": "ID Cliente",
   "Cse_prod": "ID Categoria",
   "Cve_prod": "Clave",
+  "New_med": "New_med",
+  "Valor_prod": "Valor_prod",
   "Cant_surt": "Pz.",
+  "Cve_mon": "Cve_mon",
+  "Tip_cam": "Tip_cam",
+  "Unidad": "Unidad",
+  "No_ped": "No_ped",
+  "No_rem": "No_rem",
+  "Cve_suc": "Almacen",
+  "Lote": "Lote",
   "Dcto1": "Descuento (%)",
+  "Dcto2": "Dcto2",
   "Cve_age": "ID Vendedor",
+  "Nom_fac": "Nom_fac",
+  "Cve_entre": "Cve_entre",
   "Desc_prod": "Articulo",
+  "Part_fac": "Part_fac",
+  "Ref_lote": "Ref_lote",
   "Cost_prom": "Costo Prom.",
-  "Lugar": "Almacen",
+  "Lugar": "Almacen2",
   "Hora_fac": "Hora",
+  "Cve_age2": "Cve_age2",
+  "Lista_med": "Lista_med",
+  "Contrarec": "Contrarec",
+  "Num_fac": "Num_fac",
+  "Ind_med": "Ind_med",
+  "Desc_med": "Desc_med",
+  "Costoprom2": "Costoprom2",
   "Des_tial": "Marca",
   "Cto_ent": "Costo Ent.",
   "Nom_cte": "Cliente",
   "Nom_age": "Vendedor",
+  "Nombre_ext001": "Nombre_ext001",
   "Nombre_ext002": "F1",
   "Nombre_ext003": "F2"
 };
 
+// Mapear columnas originales -> nombre común (NOTAS)
 const RENAME_NOTAS = {
   "No_fac": "Nota",
   "Cve_suc": "Albaranes",
   "Falta_fac": "Fecha",
   "Lugar": "Almacen",
+  "Status_fac": "Status_fac",
+  "Status_c": "Status_c",
+  "Cte_fac": "ID Cliente",
+  "Nom_fac": "Cliente",
+  "Rfc_cte": "Rfc_cte",
   "Descuento": "Descuento",
+  "Cve_mon": "Cve_mon",
+  "Factura": "Factura",
   "Cve_prod": "Clave",
+  "New_med": "New_med",
   "Desc_prod": "Articulo",
   "Cant_surt": "Pz.",
-  "Descu_prod": "Descuento",
+  "Valor_prod": "Valor_prod",
+  "Descu_prod": "Descuento2",
+  "Part_nta": "Part_nta",
   "Subt_prod": "Sub. Total",
   "Iva_prod": "IVA",
+  "Iva_ieps": "Iva_ieps",
+  "Ieps_prod": "Ieps_prod",
+  "Factor": "Factor",
+  "Unidad": "Unidad",
+  "Descue": "Descue",
+  "Descue2": "Descue2",
+  "Descue3": "Descue3",
+  "Descue4": "Descue4",
   "Dcto1": "Descuento (%)",
+  "Dcto2": "Dcto2",
+  "Lote": "Lote",
+  "Ref_lote": "Ref_lote",
   "Hravta": "Hora",
+  "Foliosep": "Foliosep",
+  "Separado": "Separado",
   "Cse_prod": "ID Clase",
   "Des_cse": "Clase",
+  "Sub_cse": "Sub_cse",
+  "Des_sub": "Des_sub",
+  "Sub_subcse": "Sub_subcse",
+  "Tip_cam": "Tip_cam",
+  "Retisrvtad": "Retisrvtad",
+  "Retiva_pro": "Retiva_pro",
+  "Impto1": "Impto1",
+  "Impto2": "Impto2",
+  "Timpto1": "Timpto1",
+  "Timpto2": "Timpto2",
+  "Otrosimptos": "Otrosimptos",
+  "Dessubsub": "Dessubsub",
+  "Cve_factu": "Cve_factu",
+  "Dato_1": "Dato_1",
+  "Dato_2": "Dato_2",
+  "Dato_3": "Dato_3",
+  "Dato_4": "Dato_4",
+  "Desc_med": "Desc_med",
   "Total_fac": "Total Nota",
   "Nom_age": "Vendedor",
   "Des_tial": "Marca",
-  "Cto_ent": "Costo Entrada",
-  "Nom_fac": "Cliente",       // nombre del cliente en notas
-  "Cte_fac": "ID Cliente"     // id cliente en notas
+  "Costoprom2": "Costoprom2",
+  "Cto_ent": "Costo Entrada"
 };
 
-// campo disponibles en pestaña detalle
+// Campos que puedes usar en la pestaña Detalle
 const DISPONIBLES_DETALLE = [
   "Año","Fecha","Hora","Almacen","Factura/Nota","Cliente","ID Cliente","Categoria",
   "Producto","Clave","Tipo factura","Subtotal","Costo","Descuento ($)","Descuento (%)",
@@ -71,7 +148,7 @@ const DEFAULT_DETALLE_COLS = [
   "Año","Almacen","Categoria","Subtotal","Costo","Margen %","Utilidad"
 ];
 
-// normalizar encabezados para mapear aunque traigan espacios o puntos
+// Normalizar nombres de columnas para mapear aunque traigan espacios/rutas raras
 function normalizeKey(str) {
   return String(str)
     .toLowerCase()
@@ -89,10 +166,10 @@ function buildNormalizedMap(mapping) {
 const NORM_FACT = buildNormalizedMap(RENAME_FACTURAS);
 const NORM_NOTAS = buildNormalizedMap(RENAME_NOTAS);
 
-// ----------------------------
-// ESTADO GLOBAL
-// ----------------------------
-let records = [];       // dataset unificado
+// =======================================================
+//  ESTADO GLOBAL
+// =======================================================
+let records = [];               // dataset unificado
 let yearsDisponibles = [];
 let categoriasDisponibles = [];
 let almacenesDisponibles = [];
@@ -147,9 +224,9 @@ const modalYearPrev = document.getElementById("modal-year-prev");
 const modalYearCurrent = document.getElementById("modal-year-current");
 const modalTableBody = document.querySelector("#modal-table tbody");
 
-// ----------------------------
-// UTILIDADES
-// ----------------------------
+// =======================================================
+//  UTILIDADES
+// =======================================================
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
   if (typeof value === "number") return value;
@@ -192,8 +269,6 @@ function sumField(arr, field) {
 function unique(arr) {
   return Array.from(new Set(arr));
 }
-
-// renombrar columnas tolerando espacios raros
 function renameRow(row, normalizedMap) {
   const nuevo = {};
   for (const key in row) {
@@ -202,8 +277,6 @@ function renameRow(row, normalizedMap) {
   }
   return nuevo;
 }
-
-// debounce simple para búsquedas (mejora rendimiento en archivos grandes)
 function debounce(fn, delay) {
   let t;
   return (...args) => {
@@ -212,9 +285,9 @@ function debounce(fn, delay) {
   };
 }
 
-// ----------------------------
-// LECTURA DE ARCHIVO
-// ----------------------------
+// =======================================================
+//  LECTURA DE ARCHIVO
+// =======================================================
 fileInput.addEventListener("change", handleFile);
 
 function handleFile(e) {
@@ -243,10 +316,10 @@ function handleFile(e) {
         throw new Error("No se encontraron las hojas 'facturas' y 'notas'.");
       }
 
-      // obtener encabezados de facturas para columna BB
+      // leer encabezados para identificar la columna BB (Factura del día / Rango / Base)
       const headerRowsFact = XLSX.utils.sheet_to_json(sheetFacturas, { header: 1, range: 0, raw: true });
       const headerFact = headerRowsFact[0] || [];
-      const idxBB = XLSX.utils.decode_col("BB"); // 0-based
+      const idxBB = XLSX.utils.decode_col("BB");
       const filtroColKey = headerFact[idxBB];
 
       const rawFacturas = XLSX.utils.sheet_to_json(sheetFacturas, { defval: null });
@@ -255,7 +328,7 @@ function handleFile(e) {
       const facturasRen = rawFacturas.map(row => renameRow(row, NORM_FACT));
       const notasRen = rawNotas.map(row => renameRow(row, NORM_NOTAS));
 
-      // FACTURAS
+      // ---------------- FACTURAS ----------------
       for (let i=0;i<rawFacturas.length;i++) {
         const rowOrig = rawFacturas[i];
         const row = facturasRen[i];
@@ -264,7 +337,7 @@ function handleFile(e) {
           ? (rowOrig[filtroColKey] ?? "").toString().trim().toLowerCase()
           : "";
 
-        // excluir "Factura del dia" para todo
+        // excluir "Factura del dia"
         if (flagTexto === "factura del dia") continue;
 
         const fecha = parseFecha(row["Fecha"]);
@@ -283,7 +356,7 @@ function handleFile(e) {
         if (descuentoMonto === 0 && flagTexto !== "base") esCredito = true;
         const tipoFactura = esCredito ? "credito" : "contado";
 
-        const almacen = (row["Almacen"] || "").toString().trim().toUpperCase();
+        const almacen = (row["Almacen"] || row["Almacen2"] || "").toString().trim().toUpperCase();
         const categoria = (row["ID Categoria"] || "").toString().trim();
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
@@ -312,7 +385,7 @@ function handleFile(e) {
         });
       }
 
-      // NOTAS – solo REM en Albaranes
+      // ---------------- NOTAS (solo REM) ----------------
       for (let i=0;i<rawNotas.length;i++) {
         const row = notasRen[i];
         const tipoAlbaran = (row["Albaranes"] || "").toString().trim().toLowerCase();
@@ -382,11 +455,10 @@ function handleFile(e) {
   reader.readAsArrayBuffer(file);
 }
 
-// ----------------------------
-// FILTROS
-// ----------------------------
+// =======================================================
+//  FILTROS Y ACTUALIZACIÓN
+// =======================================================
 function poblarFiltros() {
-  // año
   filterYear.innerHTML = "<option value='all'>Todos los años</option>";
   yearsDisponibles.forEach(y=>{
     const opt = document.createElement("option");
@@ -394,7 +466,7 @@ function poblarFiltros() {
     opt.textContent = y;
     filterYear.appendChild(opt);
   });
-  // almacén
+
   filterStore.innerHTML = "<option value='all'>Todos los almacenes</option>";
   almacenesDisponibles.forEach(a=>{
     const opt = document.createElement("option");
@@ -402,9 +474,9 @@ function poblarFiltros() {
     opt.textContent = a;
     filterStore.appendChild(opt);
   });
-  // tipo
+
   filterType.value = "both";
-  // categoría
+
   filterCategory.innerHTML = "<option value='all'>Todas las categorías</option>";
   categoriasDisponibles.forEach(c=>{
     const opt = document.createElement("option");
@@ -440,9 +512,6 @@ function filtrarRecords(ignorarYearEnYoY=false) {
   });
 }
 
-// ----------------------------
-// ACTUALIZAR TODO
-// ----------------------------
 filterYear.addEventListener("change", actualizarTodo);
 filterStore.addEventListener("change", actualizarTodo);
 filterType.addEventListener("change", actualizarTodo);
@@ -458,9 +527,9 @@ function actualizarTodo() {
   renderDetalle();
 }
 
-// ----------------------------
-// KPIs
-// ----------------------------
+// =======================================================
+//  KPIs
+// =======================================================
 function actualizarKpis(data) {
   const ventas = sumField(data,"subtotal");
   const utilData = data.filter(r=>r.incluirUtilidad);
@@ -492,9 +561,9 @@ function actualizarKpis(data) {
   kpiClientes.textContent = setCli.size.toLocaleString("es-MX");
 }
 
-// ----------------------------
-// GRÁFICAS
-// ----------------------------
+// =======================================================
+//  GRÁFICAS
+// =======================================================
 function actualizarGraficas(data) {
   const ctxMensual = document.getElementById("chart-mensual").getContext("2d");
   const ctxAlmacen = document.getElementById("chart-almacen").getContext("2d");
@@ -525,7 +594,6 @@ function actualizarGraficas(data) {
     }
   });
 
-  // ventas y ventas/m2 por almacén
   const porAlm = {};
   data.forEach(r=>{
     const a = r.almacen || "SIN ALMACEN";
@@ -557,11 +625,10 @@ function actualizarGraficas(data) {
   });
 }
 
-// ----------------------------
-// TOP CLIENTES / VENDEDORES
-// ----------------------------
+// =======================================================
+//  TOP CLIENTES Y VENDEDORES
+// =======================================================
 function actualizarTop(data) {
-  // clientes
   const porCliente = {};
   data.forEach(r=>{
     const cli = r.cliente || "(Sin cliente)";
@@ -593,7 +660,6 @@ function actualizarTop(data) {
     tablaTopClientes.appendChild(tr);
   });
 
-  // vendedores
   const porVend = {};
   const opsPorV = {};
   data.forEach(r=>{
@@ -627,9 +693,9 @@ function actualizarTop(data) {
   });
 }
 
-// ----------------------------
-// COMPARATIVO YOY
-// ----------------------------
+// =======================================================
+//  COMPARATIVO YOY
+// =======================================================
 function actualizarYoY() {
   const datos = filtrarRecords(true);
   if (!datos.length) {
@@ -716,9 +782,9 @@ function actualizarYoY() {
   });
 }
 
-// ----------------------------
-// MODAL DETALLE MÉTRICA
-// ----------------------------
+// =======================================================
+//  MODAL DE DETALLE POR MÉTRICA
+// =======================================================
 function abrirDetalleMetrica(metricId, yPrev, yCur) {
   const datos = filtrarRecords(true);
   const dataPrev = datos.filter(r=>r.anio===yPrev);
@@ -810,7 +876,7 @@ function abrirDetalleMetrica(metricId, yPrev, yCur) {
                (f.cur-f.prev)/(f.prev||1);
     const crecStr=(crec*100).toFixed(1)+"%";
     const cls = crec>0 ? "pill pos" : (crec<0 ? "pill neg" : "pill neu");
-    const icon = crec>0 ? "▲" : (crec<0 ? "▼" : "●";
+    const icon = crec>0 ? "▲" : (crec<0 ? "▼" : "●");
 
     function fmt(v){
       if (formato==="money") return formatCurrency(v);
@@ -836,9 +902,9 @@ modalBackdrop.addEventListener("click",e=>{
   if (e.target===modalBackdrop) modalBackdrop.classList.remove("active");
 });
 
-// ----------------------------
-// DETALLE DE DATOS
-// ----------------------------
+// =======================================================
+//  DETALLE DE DATOS (TABLA PERSONALIZABLE)
+// =======================================================
 function initChips() {
   chipsContainer.innerHTML = "";
   DISPONIBLES_DETALLE.forEach(nombre=>{
@@ -870,7 +936,6 @@ searchGlobalInput.addEventListener("input", debounce(()=>{
 }, 180));
 
 function renderDetalle() {
-  // chips
   Array.from(chipsContainer.children).forEach(chip=>{
     const name=chip.dataset.colName;
     chip.classList.toggle("selected", detalleState.columnasSeleccionadas.includes(name));
@@ -938,7 +1003,6 @@ function renderDetalleBody() {
   const datos = filtrarRecords(false);
   let arr = datos.slice();
 
-  // filtros columna
   arr = arr.filter(rec=>{
     for (const [col,val] of Object.entries(detalleState.filtrosColumna)) {
       if (!val) continue;
@@ -950,7 +1014,6 @@ function renderDetalleBody() {
     return true;
   });
 
-  // filtro global
   if (detalleState.filtroGlobal) {
     const txt=detalleState.filtroGlobal;
     arr = arr.filter(rec=>{
@@ -959,7 +1022,6 @@ function renderDetalleBody() {
     });
   }
 
-  // orden
   if (detalleSort.col) {
     const col=detalleSort.col;
     const asc=detalleSort.asc;
@@ -993,9 +1055,9 @@ function renderDetalleBody() {
   });
 }
 
-// ----------------------------
-// TABS & INIT
-// ----------------------------
+// =======================================================
+//  TABS & INIT
+// =======================================================
 Array.from(document.querySelectorAll(".tab-btn")).forEach(btn=>{
   btn.addEventListener("click",()=>{
     const tabId=btn.dataset.tab;
