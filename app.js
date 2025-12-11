@@ -10,76 +10,90 @@ const M2_POR_ALMACEN = {
   "Todas": 3225
 };
 
-// Mapeos de columnas
+// Mapeos de columnas (acepta variaciones por normalización)
 const RENAME_FACTURAS = {
   "No_fac": "Factura",
   "Falta_fac": "Fecha",
+  "Hora_fac": "Hora",
   "Descuento": "Descuento ($)",
-  "Subt_fac": "Sub. Factura",
+  "Subt_fac": "Subtotal",
   "Total_fac": "Total Factura",
   "Iva": "IVA",
   "Cve_cte": "ID Cliente",
-  "Cse_prod": "Categoria",
+  "Nom_cte": "Cliente",
+  "Cse_prod": "ID Categoria",
+  "Categoria": "Categoria Nombre",
+  "Nom_cat": "Categoria Nombre",
   "Cve_prod": "Clave",
-  "Cant_surt": "Pz.",
+  "Desc_prod": "Producto",
+  "Cant_surt": "Cantidad",
+  "Pz": "Cantidad",
   "Dcto1": "Descuento (%)",
   "Cve_age": "ID Vendedor",
-  "Desc_prod": "Articulo",
-  "Cost_prom": "Costo Prom.",
-  "Lugar": "Almacen2",
-  "Hora_fac": "Hora",
+  "Nom_age": "Vendedor",
+  "Lugar": "Almacen",
   "Des_tial": "Marca",
-  "Cto_ent": "Costo Ent.",
-  "Nom_cte": "Cliente",
-  "Nom_age": "Vendedor"
+  "Cto_ent": "Costo"
 };
 
 const RENAME_NOTAS = {
   "No_fac": "Nota",
   "Cve_suc": "Albaranes",
   "Falta_fac": "Fecha",
-  "Lugar": "Almacen",
-  "Descuento": "Descuento",
-  "Cve_prod": "Clave",
-  "Desc_prod": "Articulo",
-  "Cant_surt": "Pz.",
-  "Subt_prod": "Sub. Total",
-  "Iva_prod": "IVA",
-  "Dcto1": "Descuento (%)",
   "Hravta": "Hora",
-  "Cse_prod": "Categoria",
+  "Lugar": "Almacen",
+  "Descuento": "Descuento ($)",
+  "Cve_prod": "Clave",
+  "Desc_prod": "Producto",
+  "Cant_surt": "Cantidad",
+  "Subt_prod": "Subtotal",
+  "Iva_prod": "IVA",
   "Total_fac": "Total Nota",
+  "Dcto1": "Descuento (%)",
+  "Cse_prod": "ID Categoria",
+  "Categoria": "Categoria Nombre",
+  "Nom_cat": "Categoria Nombre",
+  "Nom_fac": "Cliente",
   "Nom_age": "Vendedor",
   "Des_tial": "Marca",
   "Cto_ent": "Costo Entrada",
-  "Nom_fac": "Cliente",
+  "Cto_entr": "Costo Entrada",
   "Cte_fac": "ID Cliente"
 };
 
-// Todas las columnas posibles para la tabla de detalle
-const DETALLE_COLS_ALL = [
+// DETALLE: paleta completa
+const DETALLE_ALL_COLS = [
   "Año",
   "Fecha",
   "Hora",
-  "Almacen",
+  "Almacén",
   "Factura/Nota",
   "Cliente",
-  "Categoria",
+  "Categoría",
   "Producto",
   "Tipo factura",
   "Subtotal",
   "Costo",
+  "Descuento",
   "Utilidad",
   "Margen %",
-  "Pz.",
   "Marca",
   "Vendedor"
 ];
 
-// Número máximo de columnas visibles en detalle
-const DETALLE_MAX_COLS = 7;
+const DETALLE_DEFAULT_COLS = [
+  "Año",
+  "Cliente",
+  "Producto",
+  "Costo",
+  "Subtotal",
+  "Margen %",
+  "Utilidad"
+];
 
 // ==================== UTILIDADES ====================
+
+function $(id) { return document.getElementById(id); }
 
 function normalizeKey(str) {
   return String(str)
@@ -99,7 +113,7 @@ const NORM_FACT = buildNormalizedMap(RENAME_FACTURAS);
 const NORM_NOTAS = buildNormalizedMap(RENAME_NOTAS);
 
 function toNumber(v) {
-  if (v === null || v === undefined) return 0;
+  if (v === null || v === undefined || v === "") return 0;
   if (typeof v === "number") return v;
   const s = v.toString().replace(/\s/g, "").replace(/,/g, "");
   const n = parseFloat(s);
@@ -107,7 +121,7 @@ function toNumber(v) {
 }
 
 function formatCurrency(v) {
-  return v.toLocaleString("es-MX", {
+  return Number(v || 0).toLocaleString("es-MX", {
     style: "currency",
     currency: "MXN",
     maximumFractionDigits: 0
@@ -115,20 +129,24 @@ function formatCurrency(v) {
 }
 
 function formatPercent(d) {
-  if (!isFinite(d)) return "0.0%";
-  return (d * 100).toFixed(1) + "%";
+  const x = Number(d || 0);
+  if (!isFinite(x)) return "0.0%";
+  return (x * 100).toFixed(1) + "%";
 }
 
 function parseFecha(v) {
   if (!v) return null;
   if (v instanceof Date) return v;
+
   if (typeof v === "number") {
     const base = new Date(Date.UTC(1899, 11, 30));
     return new Date(base.getTime() + v * 86400000);
   }
+
   const s = v.toString().trim();
   const d1 = new Date(s);
   if (!isNaN(d1)) return d1;
+
   const parts = s.split(/[\/\-]/);
   if (parts.length === 3) {
     const [a, b, c] = parts.map(x => parseInt(x, 10));
@@ -163,160 +181,246 @@ function renameRow(row, normMap) {
   return out;
 }
 
-// ==================== ESTADO Y DOM ====================
+function monthLabels() {
+  return ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function chartToPng(chart, filename) {
+  if (!chart) return;
+  const dataUrl = chart.toBase64Image();
+  downloadDataUrl(dataUrl, filename);
+}
+
+function exportJsonToXlsx(rows, filename, sheetName = "Datos") {
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
+function exportTableToPdf(title, headers, rows, filename) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  doc.setFontSize(12);
+  doc.text(title, 40, 30);
+
+  doc.autoTable({
+    startY: 45,
+    head: [headers],
+    body: rows,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [10, 20, 40] },
+    theme: "grid"
+  });
+
+  doc.save(filename);
+}
+
+// ==================== ESTADO ====================
 
 let records = [];
 let yearsDisponibles = [];
 let almacenesDisponibles = [];
 let categoriasDisponibles = [];
 
-let charts = { mensual: null, almacen: null };
-let expChart = null;
-
-// configuración persistente
-let config = {
-  mainMetric: "ventas",
-  chartType: "bar",
-  tableMode: "compact",
-  hideNegativeMargin: false,
-  maxFilasDetalle: 5000,
-  resaltarNegativos: true,
-  guardarVista: true,
-  expDimension: "mes",
-  expMetrica: "subtotal",
-  expChartType: "bar",
-  expExcluirNegativos: true
+let charts = {
+  mensual: null,
+  almacen: null,
+  credito: null,
+  categorias: null,
+  explorer: null
 };
 
+// Vista guardada (config rápida + performance)
+const LS_KEYS = {
+  detailLayout: "cedro_detalle_layout_v1",
+  quickConfig: "cedro_quick_config_v1",
+  perfConfig: "cedro_perf_config_v1"
+};
+
+let cfg = {
+  maxDetalleRows: 5000,
+  saveView: true
+};
+
+let quick = {
+  metric: "ventas",
+  chart: "bar",
+  mode: "normal",
+  negOnly: false
+};
+
+// DETALLE configurable
+let detalleColsLayout = [];
 let detalleSort = { col: null, asc: true };
 let detalleFiltros = {};
 let detalleBusqueda = "";
-let detalleColsActivas = ["Año", "Almacen", "Categoria", "Subtotal", "Margen %", "Utilidad", "Vendedor"];
+let detalleDragCol = null;
 
-let ultimaFacturaFiltro = null;
+// Modal (YoY) contexto
+let modalCtx = {
+  metricId: null,
+  yPrev: null,
+  yCur: null,
+  rows: [],
+  dimTitle: "Categoría"
+};
 
-// DOM
-const fileInput = document.getElementById("file-input");
-const fileNameSpan = document.getElementById("file-name");
-const errorDiv = document.getElementById("error");
+// Modal (Factura/Nota) contexto
+let docCtx = {
+  origen: null,
+  folio: null,
+  rows: [],
+  meta: {}
+};
 
-const filterYear = document.getElementById("filter-year");
-const filterStore = document.getElementById("filter-store");
-const filterType = document.getElementById("filter-type");
-const filterCategory = document.getElementById("filter-category");
+// ==================== DOM ====================
 
-const kpiVentas = document.getElementById("kpi-ventas");
-const kpiVentasSub = document.getElementById("kpi-ventas-sub");
-const kpiUtilidad = document.getElementById("kpi-utilidad");
-const kpiMargen = document.getElementById("kpi-margen");
-const kpiMargenSub = document.getElementById("kpi-margen-sub");
-const kpiM2 = document.getElementById("kpi-m2");
-const kpiM2Sub = document.getElementById("kpi-m2-sub");
-const kpiTrans = document.getElementById("kpi-trans");
-const kpiClientes = document.getElementById("kpi-clientes");
+const fileInput = $("file-input");
+const fileNameSpan = $("file-name");
+const errorDiv = $("error");
 
-const tablaTopClientes = document.getElementById("tabla-top-clientes");
-const tablaTopVendedores = document.getElementById("tabla-top-vendedores");
+const filterYear = $("filter-year");
+const filterStore = $("filter-store");
+const filterType = $("filter-type");
+const filterCategory = $("filter-category");
 
-const thYearPrev = document.getElementById("th-year-prev");
-const thYearCurrent = document.getElementById("th-year-current");
-const tablaYoYBody = document.getElementById("tabla-yoy");
+const qcMetric = $("qc-metric");
+const qcChart = $("qc-chart");
+const qcMode = $("qc-mode");
+const qcNegOnly = $("qc-neg-only");
 
-const detalleHeaderRow = document.getElementById("detalle-header-row");
-const detalleFilterRow = document.getElementById("detalle-filter-row");
-const detalleTableBody = document.getElementById("tabla-detalle");
-const searchGlobalInput = document.getElementById("search-global");
-const detalleChipContainer = document.getElementById("detalle-chip-container");
+const kpiVentas = $("kpi-ventas");
+const kpiVentasSub = $("kpi-ventas-sub");
+const kpiUtilidad = $("kpi-utilidad");
+const kpiUtilidadSub = $("kpi-utilidad-sub");
+const kpiMargen = $("kpi-margen");
+const kpiM2 = $("kpi-m2");
+const kpiM2Sub = $("kpi-m2-sub");
+const kpiTrans = $("kpi-trans");
+const kpiClientes = $("kpi-clientes");
 
-const modalBackdrop = document.getElementById("modal-backdrop");
-const modalClose = document.getElementById("modal-close");
-const modalTitle = document.getElementById("modal-title");
-const modalSub = document.getElementById("modal-sub");
-const modalYearPrev = document.getElementById("modal-year-prev");
-const modalYearCurrent = document.getElementById("modal-year-current");
+const tablaTopClientes = $("tabla-top-clientes");
+const tablaTopVendedores = $("tabla-top-vendedores");
+
+const thYearPrev = $("th-year-prev");
+const thYearCurrent = $("th-year-current");
+const tablaYoYBody = $("tabla-yoy");
+
+const tablaCreditoBody = $("tabla-credito");
+const tablaCategoriasBody = $("tabla-categorias");
+
+const detalleChipsContainer = $("detalle-chips");
+const detalleHeaderRow = $("detalle-header-row");
+const detalleFilterRow = $("detalle-filter-row");
+const detalleTableBody = $("tabla-detalle");
+const searchGlobalInput = $("search-global");
+
+const modalBackdrop = $("modal-backdrop");
+const modalClose = $("modal-close");
+const modalTitle = $("modal-title");
+const modalSub = $("modal-sub");
+const modalYearPrev = $("modal-year-prev");
+const modalYearCurrent = $("modal-year-current");
+const modalDimTitle = $("modal-dim-title");
 const modalTableBody = document.querySelector("#modal-table tbody");
 
-// Modal factura
-const modalFacturaBackdrop = document.getElementById("modal-factura-backdrop");
-const modalFacturaClose = document.getElementById("modal-factura-close");
-const modalFacturaTitle = document.getElementById("modal-factura-title");
-const modalFacturaSub = document.getElementById("modal-factura-sub");
-const modalFacturaTableBody = document.querySelector("#modal-factura-table tbody");
-const modalFacturaExportXls = document.getElementById("modal-factura-export-xls");
-const modalFacturaExportPdf = document.getElementById("modal-factura-export-pdf");
-const modalFacturaVerDetalle = document.getElementById("modal-factura-ver-detalle");
+const modalExportXlsx = $("modal-export-xlsx");
+const modalExportPdf = $("modal-export-pdf");
+const modalGoDetalle = $("modal-go-detalle");
 
-// Config rápida
-const qcMainMetric = document.getElementById("qc-main-metric");
-const qcChartType = document.getElementById("qc-chart-type");
-const qcTableMode = document.getElementById("qc-table-mode");
-const qcHideNegativeMargin = document.getElementById("qc-hide-negative-margin");
+const docBackdrop = $("doc-backdrop");
+const docClose = $("doc-close");
+const docTitle = $("doc-title");
+const docSub = $("doc-sub");
+const docBody = $("doc-body");
+const docExportXlsx = $("doc-export-xlsx");
+const docExportPdf = $("doc-export-pdf");
+const docGoDetalle = $("doc-go-detalle");
 
-// Explorador
-const expDimensionSel = document.getElementById("exp-dimension");
-const expMetricaSel = document.getElementById("exp-metrica");
-const expChartTypeSel = document.getElementById("exp-chart-type");
-const expExcluirNegSel = document.getElementById("exp-excluir-negativos");
-const expChartTitle = document.getElementById("exp-chart-title");
+const btnExportChartMensual = $("btn-export-chart-mensual");
+const btnExportChartAlmacen = $("btn-export-chart-almacen");
+const btnExportChartCredito = $("btn-export-chart-credito");
+const btnExportChartCategorias = $("btn-export-chart-categorias");
 
-// Config tab
-const confMaxFilas = document.getElementById("conf-max-filas");
-const confResaltarNegativos = document.getElementById("conf-resaltar-negativos");
-const confGuardarVista = document.getElementById("conf-guardar-vista");
-const confReset = document.getElementById("conf-reset");
+const chartMainTitle = $("chart-main-title");
+
+const expDim = $("exp-dim");
+const expMet = $("exp-met");
+const expType = $("exp-type");
+const expTop = $("exp-top");
+const expRefresh = $("exp-refresh");
+const expExportPng = $("exp-export-png");
+const expTitle = $("exp-title");
+const expThDim = $("exp-th-dim");
+const expThMet = $("exp-th-met");
+const tablaExplorer = $("tabla-explorer");
+
+const cfgMaxRows = $("cfg-max-rows");
+const cfgSaveView = $("cfg-save-view");
+const cfgResetView = $("cfg-reset-view");
+const cfgClearStorage = $("cfg-clear-storage");
+const cfgExportDetalleXlsx = $("cfg-export-detalle-xlsx");
+const cfgExportResumenPdf = $("cfg-export-resumen-pdf");
 
 // ==================== LOCALSTORAGE ====================
 
-function loadConfig() {
+function loadConfigs() {
+  // performance
   try {
-    const raw = localStorage.getItem("cedroDashboardConfig");
-    if (!raw) return;
-    const saved = JSON.parse(raw);
-    config = { ...config, ...saved };
-  } catch (e) {
-    console.warn("No se pudo leer config:", e);
-  }
-}
+    const raw = localStorage.getItem(LS_KEYS.perfConfig);
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (typeof v.maxDetalleRows === "number") cfg.maxDetalleRows = v.maxDetalleRows;
+      if (typeof v.saveView === "boolean") cfg.saveView = v.saveView;
+    }
+  } catch {}
 
-function saveConfig() {
-  if (!config.guardarVista) return;
+  // quick config
   try {
-    localStorage.setItem("cedroDashboardConfig", JSON.stringify(config));
-  } catch (e) {
-    console.warn("No se pudo guardar config:", e);
-  }
+    const raw = localStorage.getItem(LS_KEYS.quickConfig);
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (v.metric) quick.metric = v.metric;
+      if (v.chart) quick.chart = v.chart;
+      if (v.mode) quick.mode = v.mode;
+      if (typeof v.negOnly === "boolean") quick.negOnly = v.negOnly;
+    }
+  } catch {}
 }
 
-function applyConfigToUI() {
-  if (qcMainMetric) qcMainMetric.value = config.mainMetric;
-  if (qcChartType) qcChartType.value = config.chartType;
-  if (qcTableMode) qcTableMode.value = config.tableMode;
-  if (qcHideNegativeMargin) qcHideNegativeMargin.checked = config.hideNegativeMargin;
-
-  if (expDimensionSel) expDimensionSel.value = config.expDimension;
-  if (expMetricaSel) expMetricaSel.value = config.expMetrica;
-  if (expChartTypeSel) expChartTypeSel.value = config.expChartType;
-  if (expExcluirNegSel) expExcluirNegSel.checked = config.expExcluirNegativos;
-
-  if (confMaxFilas) confMaxFilas.value = config.maxFilasDetalle;
-  if (confResaltarNegativos) confResaltarNegativos.checked = config.resaltarNegativos;
-  if (confGuardarVista) confGuardarVista.checked = config.guardarVista;
-
-  document.body.classList.toggle("table-comfortable", config.tableMode === "comfortable");
+function saveConfigs() {
+  if (!cfg.saveView) return;
+  try {
+    localStorage.setItem(LS_KEYS.perfConfig, JSON.stringify(cfg));
+    localStorage.setItem(LS_KEYS.quickConfig, JSON.stringify(quick));
+    localStorage.setItem(LS_KEYS.detailLayout, JSON.stringify(detalleColsLayout));
+  } catch {}
 }
 
-loadConfig();
-applyConfigToUI();
-
-// ==================== LECTURA DE ARCHIVO ====================
-
-if (fileInput) {
-  fileInput.addEventListener("change", handleFile);
+function clearSaved() {
+  localStorage.removeItem(LS_KEYS.perfConfig);
+  localStorage.removeItem(LS_KEYS.quickConfig);
+  localStorage.removeItem(LS_KEYS.detailLayout);
 }
+
+// ==================== ARCHIVO ====================
+
+if (fileInput) fileInput.addEventListener("change", handleFile);
 
 function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
+
   fileNameSpan.textContent = file.name;
   errorDiv.textContent = "";
   records = [];
@@ -328,97 +432,81 @@ function handleFile(e) {
       const wb = XLSX.read(data, { type: "array" });
 
       const sheetFactName =
-        wb.SheetNames.find(n => n.toLowerCase().includes("factura")) ||
-        wb.SheetNames[0];
+        wb.SheetNames.find(n => n.toLowerCase().includes("factura")) || wb.SheetNames[0];
       const sheetNotasName =
-        wb.SheetNames.find(n => n.toLowerCase().includes("nota")) ||
-        wb.SheetNames[1];
+        wb.SheetNames.find(n => n.toLowerCase().includes("nota")) || wb.SheetNames[1];
 
       const sheetFact = wb.Sheets[sheetFactName];
       const sheetNotas = wb.Sheets[sheetNotasName];
 
-      if (!sheetFact || !sheetNotas) {
-        throw new Error("No se encontraron hojas 'facturas' y 'notas'.");
-      }
+      if (!sheetFact || !sheetNotas) throw new Error("No se encontraron hojas 'facturas' y 'notas'.");
 
       // Encabezados para localizar columna BB (Factura del día / Rango / Base)
-      const headerRows = XLSX.utils.sheet_to_json(sheetFact, {
-        header: 1,
-        range: 0,
-        raw: true
-      });
+      const headerRows = XLSX.utils.sheet_to_json(sheetFact, { header: 1, range: 0, raw: true });
       const header = headerRows[0] || [];
       const idxBB = XLSX.utils.decode_col("BB");
       const colBB = header[idxBB];
 
-      const rawFact = XLSX.utils.sheet_to_json(sheetFact, { defval: null });
-      const rawNotas = XLSX.utils.sheet_to_json(sheetNotas, { defval: null });
+      const rawFact = XLSX.utils.sheet_to_json(sheetFact, { defval: null, raw: true });
+      const rawNotas = XLSX.utils.sheet_to_json(sheetNotas, { defval: null, raw: true });
 
       const factRen = rawFact.map(r => renameRow(r, NORM_FACT));
       const notasRen = rawNotas.map(r => renameRow(r, NORM_NOTAS));
 
-      // FACTURAS
+      // FACTURAS (línea a línea)
       for (let i = 0; i < rawFact.length; i++) {
         const rowOrig = rawFact[i];
         const row = factRen[i];
 
-        const flagTexto = colBB
-          ? (rowOrig[colBB] ?? "").toString().trim().toLowerCase()
-          : "";
-
+        const flagTexto = colBB ? (rowOrig[colBB] ?? "").toString().trim().toLowerCase() : "";
         if (flagTexto === "factura del dia") continue;
 
         const fecha = parseFecha(row["Fecha"]);
         if (!fecha) continue;
+
         const anio = fecha.getFullYear();
         const mes = fecha.getMonth() + 1;
 
-        const subtotal = toNumber(row["Sub. Factura"]);
-        const costo = toNumber(row["Costo Ent."]);
+        const subtotal = toNumber(row["Subtotal"]);
+        const costo = toNumber(row["Costo"]);
         const descuentoMonto = toNumber(row["Descuento ($)"]);
         const descuentoPct = toNumber(row["Descuento (%)"]);
         const utilidad = subtotal - costo;
 
-        const incluirUtilidad =
-          !(flagTexto === "rango" || flagTexto === "base");
+        const incluirUtilidad = !(flagTexto === "rango" || flagTexto === "base");
 
         let esCredito = false;
         if (descuentoMonto === 0 && flagTexto !== "base") esCredito = true;
         const tipoFactura = esCredito ? "credito" : "contado";
 
-        const almacen = (
-          row["Almacen"] ||
-          row["Almacen2"] ||
-          ""
-        )
-          .toString()
-          .trim()
-          .toUpperCase();
+        const almacen = (row["Almacen"] || "").toString().trim().toUpperCase();
 
-        const categoria = (row["Categoria"] || "").toString().trim();
+        const categoriaId = (row["ID Categoria"] || "").toString().trim();
+        const categoriaNombre = (row["Categoria Nombre"] || "").toString().trim();
+        const categoriaLabel = categoriaNombre || categoriaId || "(Sin categoría)";
+
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
         const folio = (row["Factura"] || "").toString().trim();
         const marca = (row["Marca"] || "").toString().trim();
-        const articulo = (row["Articulo"] || "").toString().trim();
         const hora = (row["Hora"] || "").toString().trim();
-        const pz = toNumber(row["Pz."]);
-        const precioUnit = pz > 0 ? subtotal / pz : 0;
+        const producto = (row["Producto"] || "").toString().trim();
+        const cantidad = toNumber(row["Cantidad"]);
 
         records.push({
           origen: "factura",
-          anio,
-          mes,
-          fecha,
+          anio, mes, fecha,
           hora,
           almacen,
-          categoria,
+          categoriaId,
+          categoriaNombre,
+          categoria: categoriaLabel,
           cliente,
           vendedor,
           marca,
           folio,
-          articulo,
-          pz,
+          producto,
+          cantidad,
           subtotal,
           costo,
           utilidad,
@@ -426,28 +514,26 @@ function handleFile(e) {
           descuentoMonto,
           descuentoPct,
           esCredito,
-          tipoFactura,
-          precioUnit
+          tipoFactura
         });
       }
 
       // NOTAS (solo REM)
       for (let i = 0; i < rawNotas.length; i++) {
         const row = notasRen[i];
-        const albaran = (row["Albaranes"] || "")
-          .toString()
-          .trim()
-          .toLowerCase();
-        if (albaran !== "rem") continue;
+
+        const albaran = (row["Albaranes"] || "").toString().trim().toLowerCase();
+        if (albaran && albaran !== "rem") continue;
 
         const fecha = parseFecha(row["Fecha"]);
         if (!fecha) continue;
+
         const anio = fecha.getFullYear();
         const mes = fecha.getMonth() + 1;
 
-        const subtotal = toNumber(row["Sub. Total"]);
+        const subtotal = toNumber(row["Subtotal"]);
         const costo = toNumber(row["Costo Entrada"]);
-        const descuentoMonto = toNumber(row["Descuento"]);
+        const descuentoMonto = toNumber(row["Descuento ($)"]);
         const descuentoPct = toNumber(row["Descuento (%)"]);
         const utilidad = subtotal - costo;
 
@@ -457,34 +543,34 @@ function handleFile(e) {
         if (descuentoMonto === 0) esCredito = true;
         const tipoFactura = esCredito ? "credito" : "contado";
 
-        const almacen = (row["Almacen"] || "")
-          .toString()
-          .trim()
-          .toUpperCase();
-        const categoria = (row["Categoria"] || "").toString().trim();
+        const almacen = (row["Almacen"] || "").toString().trim().toUpperCase();
+
+        const categoriaId = (row["ID Categoria"] || "").toString().trim();
+        const categoriaNombre = (row["Categoria Nombre"] || "").toString().trim();
+        const categoriaLabel = categoriaNombre || categoriaId || "(Sin categoría)";
+
         const cliente = (row["Cliente"] || "").toString().trim();
         const vendedor = (row["Vendedor"] || "").toString().trim();
         const folio = (row["Nota"] || "").toString().trim();
         const marca = (row["Marca"] || "").toString().trim();
-        const articulo = (row["Articulo"] || "").toString().trim();
         const hora = (row["Hora"] || "").toString().trim();
-        const pz = toNumber(row["Pz."]);
-        const precioUnit = pz > 0 ? subtotal / pz : 0;
+        const producto = (row["Producto"] || "").toString().trim();
+        const cantidad = toNumber(row["Cantidad"]);
 
         records.push({
           origen: "nota",
-          anio,
-          mes,
-          fecha,
+          anio, mes, fecha,
           hora,
           almacen,
-          categoria,
+          categoriaId,
+          categoriaNombre,
+          categoria: categoriaLabel,
           cliente,
           vendedor,
           marca,
           folio,
-          articulo,
-          pz,
+          producto,
+          cantidad,
           subtotal,
           costo,
           utilidad,
@@ -492,43 +578,56 @@ function handleFile(e) {
           descuentoMonto,
           descuentoPct,
           esCredito,
-          tipoFactura,
-          precioUnit
+          tipoFactura
         });
       }
 
-      if (!records.length) {
-        throw new Error("No se generaron registros válidos.");
-      }
+      if (!records.length) throw new Error("No se generaron registros válidos.");
 
       yearsDisponibles = unique(records.map(r => r.anio)).sort((a, b) => a - b);
-      almacenesDisponibles = unique(records.map(r => r.almacen || ""));
-      categoriasDisponibles = unique(
-        records.map(r => r.categoria || "").filter(x => x)
-      );
+      almacenesDisponibles = unique(records.map(r => r.almacen || "").filter(Boolean));
+      categoriasDisponibles = unique(records.map(r => r.categoria || "").filter(Boolean)).sort((a,b)=>a.localeCompare(b));
 
+      habilitarUI();
       poblarFiltros();
-      initDetalleHeaders();
-      initDetalleChips();
+      initDetalleUI();
+      initExplorerUI();
       actualizarTodo();
+
     } catch (err) {
       console.error(err);
-      if (errorDiv) {
-        errorDiv.textContent = "Error al procesar el archivo: " + err.message;
-      }
+      errorDiv.textContent = "Error al procesar el archivo: " + err.message;
     }
   };
+
   reader.onerror = function () {
-    if (errorDiv) errorDiv.textContent = "No se pudo leer el archivo.";
+    errorDiv.textContent = "No se pudo leer el archivo.";
   };
+
   reader.readAsArrayBuffer(file);
 }
 
 // ==================== FILTROS ====================
 
-function poblarFiltros() {
-  if (!filterYear || !filterStore || !filterType || !filterCategory) return;
+function habilitarUI() {
+  if (filterYear) filterYear.disabled = false;
+  if (filterStore) filterStore.disabled = false;
+  if (filterType) filterType.disabled = false;
+  if (filterCategory) filterCategory.disabled = false;
 
+  if (qcMetric) qcMetric.disabled = false;
+  if (qcChart) qcChart.disabled = false;
+  if (qcMode) qcMode.disabled = false;
+
+  if (expDim) expDim.disabled = false;
+  if (expMet) expMet.disabled = false;
+  if (expType) expType.disabled = false;
+  if (expTop) expTop.disabled = false;
+  if (expRefresh) expRefresh.disabled = false;
+  if (expExportPng) expExportPng.disabled = false;
+}
+
+function poblarFiltros() {
   filterYear.innerHTML = "<option value='all'>Todos los años</option>";
   yearsDisponibles.forEach(y => {
     const opt = document.createElement("option");
@@ -539,43 +638,27 @@ function poblarFiltros() {
 
   filterStore.innerHTML = "<option value='all'>Todos los almacenes</option>";
   almacenesDisponibles.forEach(a => {
-    if (!a) return;
     const opt = document.createElement("option");
     opt.value = a;
     opt.textContent = a;
     filterStore.appendChild(opt);
   });
 
-  filterCategory.innerHTML =
-    "<option value='all'>Todas las categorías</option>";
+  filterCategory.innerHTML = "<option value='all'>Todas las categorías</option>";
   categoriasDisponibles.forEach(c => {
     const opt = document.createElement("option");
     opt.value = c;
     opt.textContent = c;
     filterCategory.appendChild(opt);
   });
-
-  filterYear.disabled = false;
-  filterStore.disabled = false;
-  filterType.disabled = false;
-  filterCategory.disabled = false;
 }
 
 function getFiltros() {
   return {
-    year: filterYear && filterYear.value === "all"
-      ? null
-      : filterYear
-      ? parseInt(filterYear.value, 10)
-      : null,
-    store: filterStore && filterStore.value === "all" ? null : filterStore ? filterStore.value : null,
+    year: filterYear && filterYear.value !== "all" ? parseInt(filterYear.value, 10) : null,
+    store: filterStore && filterStore.value !== "all" ? filterStore.value : null,
     tipo: filterType ? filterType.value : "both",
-    categoria:
-      filterCategory && filterCategory.value === "all"
-        ? null
-        : filterCategory
-        ? filterCategory.value
-        : null
+    categoria: filterCategory && filterCategory.value !== "all" ? filterCategory.value : null
   };
 }
 
@@ -596,15 +679,56 @@ if (filterStore) filterStore.addEventListener("change", actualizarTodo);
 if (filterType) filterType.addEventListener("change", actualizarTodo);
 if (filterCategory) filterCategory.addEventListener("change", actualizarTodo);
 
+// ==================== CONFIG RÁPIDA ====================
+
+function applyQuickToUI() {
+  if (qcMetric) qcMetric.value = quick.metric;
+  if (qcChart) qcChart.value = quick.chart;
+  if (qcMode) qcMode.value = quick.mode;
+  if (qcNegOnly) qcNegOnly.checked = quick.negOnly;
+
+  document.body.classList.toggle("compact-mode", quick.mode === "compact");
+}
+
+function initQuickConfig() {
+  if (qcMetric) qcMetric.addEventListener("change", () => {
+    quick.metric = qcMetric.value;
+    saveConfigs();
+    actualizarTodo();
+  });
+
+  if (qcChart) qcChart.addEventListener("change", () => {
+    quick.chart = qcChart.value;
+    saveConfigs();
+    actualizarTodo();
+  });
+
+  if (qcMode) qcMode.addEventListener("change", () => {
+    quick.mode = qcMode.value;
+    applyQuickToUI();
+    saveConfigs();
+    renderDetalle();
+  });
+
+  if (qcNegOnly) qcNegOnly.addEventListener("change", () => {
+    quick.negOnly = !!qcNegOnly.checked;
+    saveConfigs();
+    renderDetalle();
+  });
+}
+
 // ==================== KPIs / GRÁFICAS / TOP ====================
 
 function actualizarTodo() {
   if (!records.length) return;
+
   const datos = filtrarRecords(false);
   actualizarKpis(datos);
-  actualizarGraficas(datos);
+  actualizarGraficasResumen(datos);
   actualizarTop(datos);
   actualizarYoY();
+  actualizarCredito(datos);
+  actualizarCategorias(datos);
   renderDetalle();
   actualizarExplorador();
 }
@@ -622,15 +746,13 @@ function actualizarKpis(data) {
   if (kpiVentas) kpiVentas.textContent = formatCurrency(ventas);
   if (kpiVentasSub) kpiVentasSub.textContent = `Periodo: ${yearTxt}, almacén: ${almTxt}`;
   if (kpiUtilidad) kpiUtilidad.textContent = formatCurrency(utilidad);
+  if (kpiUtilidadSub) kpiUtilidadSub.textContent = `Basado en ${utilData.length} filas válidas`;
   if (kpiMargen) kpiMargen.textContent = formatPercent(margen);
-  if (kpiMargenSub) kpiMargenSub.textContent = `Basado en ${utilData.length} filas válidas`;
 
   let m2 = 0;
-  if (filtros.store && M2_POR_ALMACEN[filtros.store]) {
-    m2 = M2_POR_ALMACEN[filtros.store];
-  } else {
-    m2 = M2_POR_ALMACEN["Todas"];
-  }
+  if (filtros.store && M2_POR_ALMACEN[filtros.store]) m2 = M2_POR_ALMACEN[filtros.store];
+  else m2 = M2_POR_ALMACEN["Todas"];
+
   const ventasM2 = m2 > 0 ? ventas / m2 : 0;
   if (kpiM2) kpiM2.textContent = formatCurrency(ventasM2) + "/m²";
   if (kpiM2Sub) kpiM2Sub.textContent = `${filtros.store || "Todas"} – ${m2.toLocaleString("es-MX")} m²`;
@@ -638,53 +760,93 @@ function actualizarKpis(data) {
   const opsSet = new Set(data.map(r => r.origen + "|" + r.folio));
   if (kpiTrans) kpiTrans.textContent = opsSet.size.toLocaleString("es-MX");
 
-  const clientesSet = new Set(
-    data.map(r => r.cliente || "").filter(x => x !== "")
-  );
+  const clientesSet = new Set(data.map(r => r.cliente || "").filter(x => x));
   if (kpiClientes) kpiClientes.textContent = clientesSet.size.toLocaleString("es-MX");
 }
 
-function actualizarGraficas(data) {
-  const canvasMensual = document.getElementById("chart-mensual");
-  const canvasAlm = document.getElementById("chart-almacen");
+function buildMainMetric(data) {
+  // para gráfica mensual principal
+  if (quick.metric === "ventas") return { title: "Ventas por mes", get: r => r.subtotal, fmt: formatCurrency };
+  if (quick.metric === "utilidad") return { title: "Utilidad por mes", get: r => (r.incluirUtilidad ? r.utilidad : 0), fmt: formatCurrency };
+  if (quick.metric === "margen") return {
+    title: "Margen % por mes",
+    get: null,
+    fmt: formatPercent
+  };
+  if (quick.metric === "credito") return {
+    title: "Ventas a crédito por mes",
+    get: r => (r.esCredito ? r.subtotal : 0),
+    fmt: formatCurrency
+  };
+  return { title: "Ventas por mes", get: r => r.subtotal, fmt: formatCurrency };
+}
+
+function actualizarGraficasResumen(data) {
+  const canvasMensual = $("chart-mensual");
+  const canvasAlm = $("chart-almacen");
   if (!canvasMensual || !canvasAlm) return;
 
-  const ctxMensual = canvasMensual.getContext("2d");
-  const ctxAlm = canvasAlm.getContext("2d");
-
+  // base por año: si no elige año, usa el máximo
   const filtros = getFiltros();
   let base = data;
-  if (!filtros.year) {
-    const maxYear = Math.max(...yearsDisponibles);
-    base = data.filter(r => r.anio === maxYear);
+  let y = filtros.year;
+  if (!y) y = Math.max(...yearsDisponibles);
+  base = data.filter(r => r.anio === y);
+
+  const metric = buildMainMetric(base);
+  if (chartMainTitle) chartMainTitle.textContent = metric.title;
+
+  const labelsMes = monthLabels();
+
+  // Mensual
+  let values = new Array(12).fill(0);
+  if (quick.metric === "margen") {
+    // margen mes = utilidad/ventas
+    const ventasMes = new Array(12).fill(0);
+    const utilMes = new Array(12).fill(0);
+    base.forEach(r => {
+      const idx = r.mes - 1;
+      if (idx < 0 || idx > 11) return;
+      ventasMes[idx] += r.subtotal;
+      if (r.incluirUtilidad) utilMes[idx] += r.utilidad;
+    });
+    values = ventasMes.map((v, i) => (v > 0 ? utilMes[i] / v : 0));
+  } else {
+    base.forEach(r => {
+      const idx = r.mes - 1;
+      if (idx < 0 || idx > 11) return;
+      values[idx] += metric.get(r);
+    });
   }
 
-  const ventasMes = new Array(12).fill(0);
-  base.forEach(r => {
-    const idx = r.mes - 1;
-    if (idx >= 0 && idx < 12) ventasMes[idx] += r.subtotal;
-  });
-  const labelsMes = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-
+  const ctxM = canvasMensual.getContext("2d");
   if (charts.mensual) charts.mensual.destroy();
-  charts.mensual = new Chart(ctxMensual, {
-    type: config.chartType === "line" ? "line" : "bar",
+
+  const typeMensual = (quick.chart === "pie" || quick.chart === "doughnut") ? "bar" : quick.chart;
+
+  charts.mensual = new Chart(ctxM, {
+    type: typeMensual,
     data: {
       labels: labelsMes,
-      datasets: [{ label: "Ventas", data: ventasMes }]
+      datasets: [{ label: metric.title, data: values }]
     },
     options: {
       responsive: true,
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
+      scales: (typeMensual === "pie" || typeMensual === "doughnut") ? {} : {
+        y: {
+          ticks: {
+            callback: v => (quick.metric === "margen" ? (v*100).toFixed(1) + "%" : v.toLocaleString("es-MX"))
+          }
+        }
       }
     }
   });
 
+  // Por almacén
   const porAlm = {};
   data.forEach(r => {
     const a = r.almacen || "(sin)";
-    if (!porAlm[a]) porAlm[a] = { ventas: 0, m2Ventas: 0 };
+    if (!porAlm[a]) porAlm[a] = { ventas: 0 };
     porAlm[a].ventas += r.subtotal;
   });
 
@@ -695,8 +857,9 @@ function actualizarGraficas(data) {
     return m2 > 0 ? porAlm[a].ventas / m2 : 0;
   });
 
+  const ctxA = canvasAlm.getContext("2d");
   if (charts.almacen) charts.almacen.destroy();
-  charts.almacen = new Chart(ctxAlm, {
+  charts.almacen = new Chart(ctxA, {
     type: "bar",
     data: {
       labels: labsAlm,
@@ -707,9 +870,7 @@ function actualizarGraficas(data) {
     },
     options: {
       responsive: true,
-      scales: {
-        y: { ticks: { callback: v => v.toLocaleString("es-MX") } }
-      }
+      scales: { y: { ticks: { callback: v => v.toLocaleString("es-MX") } } }
     }
   });
 }
@@ -729,6 +890,7 @@ function actualizarTop(data) {
       clientes[c].n++;
     }
   });
+
   const listaC = Object.entries(clientes)
     .map(([nombre, d]) => ({
       nombre,
@@ -790,21 +952,20 @@ function actualizarTop(data) {
   });
 }
 
-// ==================== COMPARATIVO YOY ====================
+// ==================== YOY ====================
 
 function actualizarYoY() {
   if (!tablaYoYBody || !thYearPrev || !thYearCurrent) return;
 
   const datos = filtrarRecords(true);
   if (!datos.length) {
-    tablaYoYBody.innerHTML =
-      "<tr><td colspan='4' class='muted'>No hay datos.</td></tr>";
+    tablaYoYBody.innerHTML = "<tr><td colspan='4' class='muted'>No hay datos.</td></tr>";
     return;
   }
+
   const years = unique(datos.map(r => r.anio)).sort((a, b) => a - b);
   if (years.length < 2) {
-    tablaYoYBody.innerHTML =
-      "<tr><td colspan='4' class='muted'>Se requiere al menos 2 años.</td></tr>";
+    tablaYoYBody.innerHTML = "<tr><td colspan='4' class='muted'>Se requiere al menos 2 años.</td></tr>";
     return;
   }
 
@@ -820,49 +981,24 @@ function actualizarYoY() {
   const ventasPrev = sumField(dataPrev, "subtotal");
   const ventasCur = sumField(dataCur, "subtotal");
 
-  const utilPrev = sumField(
-    dataPrev.filter(r => r.incluirUtilidad),
-    "utilidad"
-  );
-  const utilCur = sumField(
-    dataCur.filter(r => r.incluirUtilidad),
-    "utilidad"
-  );
+  const utilPrev = sumField(dataPrev.filter(r => r.incluirUtilidad), "utilidad");
+  const utilCur = sumField(dataCur.filter(r => r.incluirUtilidad), "utilidad");
 
   const mPrev = ventasPrev > 0 ? utilPrev / ventasPrev : 0;
   const mCur = ventasCur > 0 ? utilCur / ventasCur : 0;
 
-  const credPrev = sumField(
-    dataPrev.filter(r => r.esCredito),
-    "subtotal"
-  );
-  const credCur = sumField(
-    dataCur.filter(r => r.esCredito),
-    "subtotal"
-  );
+  const credPrev = sumField(dataPrev.filter(r => r.esCredito), "subtotal");
+  const credCur = sumField(dataCur.filter(r => r.esCredito), "subtotal");
   const pctCredPrev = ventasPrev > 0 ? credPrev / ventasPrev : 0;
   const pctCredCur = ventasCur > 0 ? credCur / ventasCur : 0;
 
-  const utilNegPrevBase = dataPrev.filter(
-    r => r.incluirUtilidad && r.subtotal > 0
-  );
-  const utilNegCurBase = dataCur.filter(
-    r => r.incluirUtilidad && r.subtotal > 0
-  );
-  const pctNegPrev = utilNegPrevBase.length
-    ? utilNegPrevBase.filter(r => r.utilidad < 0).length /
-      utilNegPrevBase.length
-    : 0;
-  const pctNegCur = utilNegCurBase.length
-    ? utilNegCurBase.filter(r => r.utilidad < 0).length /
-      utilNegCurBase.length
-    : 0;
+  const utilNegPrevBase = dataPrev.filter(r => r.incluirUtilidad && r.subtotal > 0);
+  const utilNegCurBase = dataCur.filter(r => r.incluirUtilidad && r.subtotal > 0);
+  const pctNegPrev = utilNegPrevBase.length ? utilNegPrevBase.filter(r => r.utilidad < 0).length / utilNegPrevBase.length : 0;
+  const pctNegCur = utilNegCurBase.length ? utilNegCurBase.filter(r => r.utilidad < 0).length / utilNegCurBase.length : 0;
 
   const filtros = getFiltros();
-  const m2Valor =
-    filtros.store && M2_POR_ALMACEN[filtros.store]
-      ? M2_POR_ALMACEN[filtros.store]
-      : M2_POR_ALMACEN["Todas"];
+  const m2Valor = filtros.store && M2_POR_ALMACEN[filtros.store] ? M2_POR_ALMACEN[filtros.store] : M2_POR_ALMACEN["Todas"];
 
   const rows = [
     { id: "ventas", nombre: "Ventas (Subtotal)", prev: ventasPrev, cur: ventasCur, tipo: "money" },
@@ -892,7 +1028,6 @@ function actualizarYoY() {
     }
 
     const tr = document.createElement("tr");
-    tr.dataset.metricId = r.id;
     tr.innerHTML = `
       <td>${r.nombre}</td>
       <td class="text-right">${fmt(r.prev)}</td>
@@ -905,11 +1040,16 @@ function actualizarYoY() {
 }
 
 function abrirDetalleMetrica(metricId, yPrev, yCur) {
-  if (!modalBackdrop || !modalTitle || !modalSub || !modalYearPrev || !modalYearCurrent || !modalTableBody) return;
+  if (!modalBackdrop || !modalTableBody) return;
 
   const datos = filtrarRecords(true);
   const dataPrev = datos.filter(r => r.anio === yPrev);
   const dataCur = datos.filter(r => r.anio === yCur);
+
+  modalCtx.metricId = metricId;
+  modalCtx.yPrev = yPrev;
+  modalCtx.yCur = yCur;
+  modalCtx.rows = [];
 
   modalYearPrev.textContent = yPrev;
   modalYearCurrent.textContent = yCur;
@@ -952,30 +1092,23 @@ function abrirDetalleMetrica(metricId, yPrev, yCur) {
   } else if (metricId === "m2") {
     titulo = "Detalle de m² por almacén";
     modalTitle.textContent = titulo;
-    const filtros = getFiltros();
-    modalSub.textContent = filtros.store
-      ? `Almacén ${filtros.store}`
-      : "Todas las sucursales";
+    modalSub.textContent = "m² configurados";
+
+    modalDimTitle.textContent = "Almacén";
     modalTableBody.innerHTML = "";
 
     const filas = [];
-    if (filtros.store && M2_POR_ALMACEN[filtros.store]) {
-      filas.push({
-        cat: filtros.store,
-        prev: M2_POR_ALMACEN[filtros.store],
-        cur: M2_POR_ALMACEN[filtros.store]
-      });
-    } else {
-      Object.keys(M2_POR_ALMACEN).forEach(k => {
-        if (k === "Todas") return;
-        filas.push({ cat: k, prev: M2_POR_ALMACEN[k], cur: M2_POR_ALMACEN[k] });
-      });
-    }
+    Object.keys(M2_POR_ALMACEN).forEach(k => {
+      if (k === "Todas") return;
+      filas.push({ dim: k, prev: M2_POR_ALMACEN[k], cur: M2_POR_ALMACEN[k] });
+    });
+
+    modalCtx.rows = filas.map(f => ({ dimension: f.dim, prev: f.prev, cur: f.cur, growth: 0 }));
 
     filas.forEach(f => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${f.cat}</td>
+        <td>${f.dim}</td>
         <td class="text-right">${f.prev.toLocaleString("es-MX")}</td>
         <td class="text-right">${f.cur.toLocaleString("es-MX")}</td>
         <td class="text-right"><span class="pill neu">● 0.0%</span></td>
@@ -987,216 +1120,393 @@ function abrirDetalleMetrica(metricId, yPrev, yCur) {
     return;
   }
 
-  const filtros = getFiltros();
   modalTitle.textContent = titulo;
+  const filtros = getFiltros();
   modalSub.textContent = `Filtros: almacén=${filtros.store || "Todos"}, tipo=${filtros.tipo}, categoría=${filtros.categoria || "Todas"}`;
 
+  modalDimTitle.textContent = "Categoría";
+
   const cats = unique(datos.map(r => r.categoria || "(Sin categoría)"));
+
   const filas = cats.map(cat => {
     const aPrev = dataPrev.filter(r => (r.categoria || "(Sin categoría)") === cat);
     const aCur = dataCur.filter(r => (r.categoria || "(Sin categoría)") === cat);
-    return { cat, prev: calc(aPrev), cur: calc(aCur) };
+    return { dim: cat, prev: calc(aPrev), cur: calc(aCur) };
   });
 
   modalTableBody.innerHTML = "";
-  filas
-    .sort((a, b) => b.cur - a.cur)
-    .forEach(f => {
-      let crec;
-      if (f.prev === 0 && f.cur > 0) crec = 1;
-      else if (f.prev === 0 && f.cur === 0) crec = 0;
-      else crec = (f.cur - f.prev) / (f.prev || 1);
 
-      const crecStr = (crec * 100).toFixed(1) + "%";
-      const cls = crec > 0 ? "pill pos" : crec < 0 ? "pill neg" : "pill neu";
-      const icon = crec > 0 ? "▲" : crec < 0 ? "▼" : "●";
+  const sorted = filas.sort((a, b) => b.cur - a.cur);
 
-      function fmt(v) {
-        if (tipo === "money") return formatCurrency(v);
-        if (tipo === "percent") return formatPercent(v);
-        return v.toLocaleString("es-MX");
+  modalCtx.rows = sorted.map(f => {
+    let crec;
+    if (f.prev === 0 && f.cur > 0) crec = 1;
+    else if (f.prev === 0 && f.cur === 0) crec = 0;
+    else crec = (f.cur - f.prev) / (f.prev || 1);
+    return { dimension: f.dim, prev: f.prev, cur: f.cur, growth: crec };
+  });
+
+  sorted.forEach(f => {
+    let crec;
+    if (f.prev === 0 && f.cur > 0) crec = 1;
+    else if (f.prev === 0 && f.cur === 0) crec = 0;
+    else crec = (f.cur - f.prev) / (f.prev || 1);
+
+    const crecStr = (crec * 100).toFixed(1) + "%";
+    const cls = crec > 0 ? "pill pos" : crec < 0 ? "pill neg" : "pill neu";
+    const icon = crec > 0 ? "▲" : crec < 0 ? "▼" : "●";
+
+    function fmt(v) {
+      if (tipo === "money") return formatCurrency(v);
+      if (tipo === "percent") return formatPercent(v);
+      return v.toLocaleString("es-MX");
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="linkish">${f.dim}</td>
+      <td class="text-right">${fmt(f.prev)}</td>
+      <td class="text-right">${fmt(f.cur)}</td>
+      <td class="text-right"><span class="${cls}">${icon} ${crecStr}</span></td>
+    `;
+
+    tr.addEventListener("click", () => {
+      // ir a detalle filtrado por esa categoría
+      if (filterCategory) {
+        filterCategory.value = categoriasDisponibles.includes(f.dim) ? f.dim : "all";
       }
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${f.cat}</td>
-        <td class="text-right">${fmt(f.prev)}</td>
-        <td class="text-right">${fmt(f.cur)}</td>
-        <td class="text-right"><span class="${cls}">${icon} ${crecStr}</span></td>
-      `;
-      modalTableBody.appendChild(tr);
+      switchTab("tab-detalle");
+      renderDetalle();
+      modalBackdrop.classList.remove("active");
     });
+
+    modalTableBody.appendChild(tr);
+  });
 
   modalBackdrop.classList.add("active");
 }
 
 if (modalClose && modalBackdrop) {
-  modalClose.addEventListener("click", () =>
-    modalBackdrop.classList.remove("active")
-  );
-  modalBackdrop.addEventListener("click", e => {
-    if (e.target === modalBackdrop) modalBackdrop.classList.remove("active");
+  modalClose.addEventListener("click", () => modalBackdrop.classList.remove("active"));
+  modalBackdrop.addEventListener("click", e => { if (e.target === modalBackdrop) modalBackdrop.classList.remove("active"); });
+}
+
+// Exportaciones modal YoY
+if (modalExportXlsx) modalExportXlsx.addEventListener("click", () => {
+  if (!modalCtx.rows?.length) return;
+  const out = modalCtx.rows.map(r => ({
+    Dimension: r.dimension,
+    [modalYearPrev.textContent]: r.prev,
+    [modalYearCurrent.textContent]: r.cur,
+    "Crecimiento %": (r.growth * 100).toFixed(1) + "%"
+  }));
+  exportJsonToXlsx(out, `Detalle_${modalCtx.metricId}_${modalCtx.yPrev}_${modalCtx.yCur}.xlsx`, "Detalle");
+});
+
+if (modalExportPdf) modalExportPdf.addEventListener("click", () => {
+  if (!modalCtx.rows?.length) return;
+  const headers = [modalDimTitle.textContent, modalYearPrev.textContent, modalYearCurrent.textContent, "Crecimiento %"];
+  const rows = modalCtx.rows.map(r => [
+    r.dimension,
+    r.prev,
+    r.cur,
+    (r.growth * 100).toFixed(1) + "%"
+  ]);
+  exportTableToPdf(modalTitle.textContent, headers, rows, `Detalle_${modalCtx.metricId}_${modalCtx.yPrev}_${modalCtx.yCur}.pdf`);
+});
+
+if (modalGoDetalle) modalGoDetalle.addEventListener("click", () => {
+  switchTab("tab-detalle");
+  modalBackdrop.classList.remove("active");
+});
+
+// ==================== CRÉDITO VS CONTADO ====================
+
+function actualizarCredito(data) {
+  const canvas = $("chart-credito");
+  if (!canvas || !tablaCreditoBody) return;
+
+  const filtros = getFiltros();
+  let yearBase = filtros.year;
+  if (!yearBase) yearBase = Math.max(...yearsDisponibles);
+
+  const base = data.filter(r => r.anio === yearBase);
+
+  const ventasCont = new Array(12).fill(0);
+  const ventasCred = new Array(12).fill(0);
+
+  base.forEach(r => {
+    const idx = r.mes - 1;
+    if (idx < 0 || idx > 11) return;
+    if (r.tipoFactura === "credito") ventasCred[idx] += r.subtotal;
+    else ventasCont[idx] += r.subtotal;
+  });
+
+  const labelsMes = monthLabels();
+  const ctx = canvas.getContext("2d");
+
+  if (charts.credito) charts.credito.destroy();
+  charts.credito = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labelsMes,
+      datasets: [
+        { label: "Contado", data: ventasCont, stack: "ventas" },
+        { label: "Crédito", data: ventasCred, stack: "ventas" }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, ticks: { callback: v => v.toLocaleString("es-MX") } }
+      }
+    }
+  });
+
+  tablaCreditoBody.innerHTML = "";
+  labelsMes.forEach((mesLabel, idx) => {
+    const cont = ventasCont[idx];
+    const cred = ventasCred[idx];
+    const total = cont + cred;
+    if (total === 0) return;
+    const pctCred = total > 0 ? cred / total : 0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${mesLabel} ${yearBase}</td>
+      <td class="text-right">${formatCurrency(cont)}</td>
+      <td class="text-right">${formatCurrency(cred)}</td>
+      <td class="text-right">${formatCurrency(total)}</td>
+      <td class="text-right">${formatPercent(pctCred)}</td>
+    `;
+    tablaCreditoBody.appendChild(tr);
   });
 }
 
-// ==================== DETALLE ====================
+// ==================== CATEGORÍAS ====================
 
-function initDetalleHeaders() {
-  if (!detalleHeaderRow || !detalleFilterRow) return;
+function actualizarCategorias(data) {
+  const canvas = $("chart-categorias");
+  if (!canvas || !tablaCategoriasBody) return;
 
-  renderDetalleHeaders();
+  const grupos = {};
+  data.forEach(r => {
+    const cat = r.categoria || "(Sin categoría)";
+    if (!grupos[cat]) grupos[cat] = { ventas: 0, utilidad: 0, ventasCred: 0, ventasTot: 0 };
+    grupos[cat].ventas += r.subtotal;
+    if (r.incluirUtilidad) grupos[cat].utilidad += r.utilidad;
+    if (r.esCredito) grupos[cat].ventasCred += r.subtotal;
+    grupos[cat].ventasTot += r.subtotal;
+  });
+
+  const lista = Object.entries(grupos).map(([cat, d]) => {
+    const margen = d.ventas > 0 ? d.utilidad / d.ventas : 0;
+    const pctCred = d.ventasTot > 0 ? d.ventasCred / d.ventasTot : 0;
+    return { cat, ventas: d.ventas, utilidad: d.utilidad, margen, pctCred };
+  });
+
+  const top = lista.slice().sort((a,b) => b.ventas - a.ventas).slice(0, 12);
+
+  const labels = top.map(x => x.cat);
+  const valores = top.map(x => x.ventas);
+
+  const ctx = canvas.getContext("2d");
+  if (charts.categorias) charts.categorias.destroy();
+  charts.categorias = new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets: [{ label: "Ventas", data: valores }] },
+    options: {
+      responsive: true,
+      indexAxis: "y",
+      onClick: (evt, elements) => {
+        if (!elements?.length) return;
+        const i = elements[0].index;
+        const cat = labels[i];
+        if (filterCategory) filterCategory.value = categoriasDisponibles.includes(cat) ? cat : "all";
+        switchTab("tab-detalle");
+        renderDetalle();
+      },
+      scales: {
+        x: { ticks: { callback: v => v.toLocaleString("es-MX") } }
+      }
+    }
+  });
+
+  tablaCategoriasBody.innerHTML = "";
+  lista.sort((a,b) => b.ventas - a.ventas).forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="linkish">${r.cat}</td>
+      <td class="text-right">${formatCurrency(r.ventas)}</td>
+      <td class="text-right">${formatCurrency(r.utilidad)}</td>
+      <td class="text-right">${formatPercent(r.margen)}</td>
+      <td class="text-right">${formatPercent(r.pctCred)}</td>
+    `;
+    tr.addEventListener("click", () => {
+      if (filterCategory) filterCategory.value = categoriasDisponibles.includes(r.cat) ? r.cat : "all";
+      switchTab("tab-detalle");
+      renderDetalle();
+    });
+    tablaCategoriasBody.appendChild(tr);
+  });
+}
+
+// ==================== DETALLE (CONFIGURABLE + CLICK FACTURA) ====================
+
+function cargarDetalleLayout() {
+  detalleColsLayout = [...DETALLE_DEFAULT_COLS];
+  try {
+    const raw = localStorage.getItem(LS_KEYS.detailLayout);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    const filtrado = arr.filter(c => DETALLE_ALL_COLS.includes(c));
+    if (filtrado.length === 7) detalleColsLayout = filtrado;
+  } catch {}
+}
+
+function initDetalleUI() {
+  cargarDetalleLayout();
   detalleFiltros = {};
+  detalleSort = { col: null, asc: true };
 
   if (searchGlobalInput) {
-    searchGlobalInput.addEventListener(
-      "input",
-      debounce(() => {
-        detalleBusqueda = searchGlobalInput.value.toLowerCase();
-        renderDetalle();
-      }, 200)
-    );
+    searchGlobalInput.addEventListener("input", debounce(() => {
+      detalleBusqueda = (searchGlobalInput.value || "").toLowerCase();
+      renderDetalle();
+    }, 200));
   }
+
+  renderDetalleHeaders();
+  renderDetalleChips();
+}
+
+function renderDetalleChips() {
+  if (!detalleChipsContainer) return;
+  detalleChipsContainer.innerHTML = "";
+
+  const disponibles = DETALLE_ALL_COLS.filter(c => !detalleColsLayout.includes(c));
+  disponibles.forEach(col => {
+    const chip = document.createElement("button");
+    chip.className = "chip";
+    chip.textContent = col;
+    chip.draggable = true;
+    chip.dataset.col = col;
+
+    chip.addEventListener("dragstart", () => { detalleDragCol = col; });
+
+    // click rápido: reemplaza la primera columna
+    chip.addEventListener("click", () => {
+      detalleColsLayout[0] = col;
+      if (cfg.saveView) saveConfigs();
+      renderDetalleHeaders();
+      renderDetalleChips();
+      renderDetalle();
+    });
+
+    detalleChipsContainer.appendChild(chip);
+  });
 }
 
 function renderDetalleHeaders() {
+  if (!detalleHeaderRow || !detalleFilterRow) return;
+
   detalleHeaderRow.innerHTML = "";
   detalleFilterRow.innerHTML = "";
+  detalleFiltros = {};
 
-  detalleColsActivas.forEach(col => {
+  detalleColsLayout.forEach(col => {
+    // header
     const th = document.createElement("th");
     th.classList.add("sortable", "th-drop-target");
     th.dataset.col = col;
-    th.draggable = false;
-    th.innerHTML = `${col} <span>⇅</span>`;
+    th.textContent = col;
+
+    const sortSpan = document.createElement("span");
+    sortSpan.textContent = "⇵";
+    th.appendChild(sortSpan);
+
     th.addEventListener("click", () => sortDetalle(col));
-    th.addEventListener("dragover", e => {
-      e.preventDefault();
-    });
+
+    th.addEventListener("dragover", e => { e.preventDefault(); th.classList.add("th-drop-target-over"); });
+    th.addEventListener("dragleave", () => th.classList.remove("th-drop-target-over"));
     th.addEventListener("drop", e => {
       e.preventDefault();
-      const colName = e.dataTransfer.getData("text/colName");
-      if (!colName) return;
-      // insertar en la posición de esta columna
-      const idx = detalleColsActivas.indexOf(col);
+      th.classList.remove("th-drop-target-over");
+      if (!detalleDragCol) return;
+      const idx = detalleColsLayout.indexOf(col);
       if (idx === -1) return;
-      if (!detalleColsActivas.includes(colName)) {
-        // sustituir
-        detalleColsActivas[idx] = colName;
-      } else {
-        // reordenar
-        const from = detalleColsActivas.indexOf(colName);
-        detalleColsActivas.splice(from, 1);
-        detalleColsActivas.splice(idx, 0, colName);
-      }
+      detalleColsLayout[idx] = detalleDragCol;
+      detalleDragCol = null;
+      if (cfg.saveView) saveConfigs();
       renderDetalleHeaders();
+      renderDetalleChips();
       renderDetalle();
-      initDetalleChips();
-      saveConfig();
     });
+
     detalleHeaderRow.appendChild(th);
 
+    // filtros por columna
     const thF = document.createElement("th");
     const inp = document.createElement("input");
     inp.type = "text";
     inp.className = "filter-input";
     inp.placeholder = "Filtrar...";
-    inp.value = detalleFiltros[col] || "";
-    inp.addEventListener(
-      "input",
-      debounce(() => {
-        detalleFiltros[col] = inp.value.toLowerCase();
-        renderDetalle();
-      }, 150)
-    );
+    inp.addEventListener("input", debounce(() => {
+      detalleFiltros[col] = (inp.value || "").toLowerCase();
+      renderDetalle();
+    }, 150));
     thF.appendChild(inp);
     detalleFilterRow.appendChild(thF);
   });
 }
 
-function initDetalleChips() {
-  if (!detalleChipContainer) return;
-  detalleChipContainer.innerHTML = "";
-
-  DETALLE_COLS_ALL.forEach(col => {
-    const chip = document.createElement("div");
-    chip.className = "chip";
-    chip.textContent = col;
-    chip.dataset.col = col;
-    if (detalleColsActivas.includes(col)) {
-      chip.classList.add("active");
-    }
-    chip.draggable = true;
-    chip.addEventListener("dragstart", e => {
-      e.dataTransfer.setData("text/colName", col);
-    });
-    detalleChipContainer.appendChild(chip);
-  });
-}
-
 function getValorDetalle(r, col) {
   switch (col) {
-    case "Año":
-      return r.anio;
-    case "Fecha":
-      return r.fecha.toISOString().slice(0, 10);
-    case "Hora":
-      return r.hora || "";
-    case "Almacen":
-      return r.almacen;
-    case "Factura/Nota":
-      return r.folio;
-    case "Cliente":
-      return r.cliente;
-    case "Categoria":
-      return r.categoria;
-    case "Producto":
-      return r.articulo;
-    case "Tipo factura":
-      return r.tipoFactura === "credito" ? "Crédito" : "Contado";
-    case "Subtotal":
-      return r.subtotal;
-    case "Costo":
-      return r.costo;
-    case "Utilidad":
-      return r.utilidad;
-    case "Margen %":
-      return r.subtotal > 0 ? r.utilidad / r.subtotal : 0;
-    case "Pz.":
-      return r.pz;
-    case "Marca":
-      return r.marca;
-    case "Vendedor":
-      return r.vendedor;
-    default:
-      return "";
+    case "Año": return r.anio;
+    case "Fecha": return r.fecha ? r.fecha.toISOString().slice(0,10) : "";
+    case "Hora": return r.hora || "";
+    case "Almacén": return r.almacen || "";
+    case "Factura/Nota": return r.folio || "";
+    case "Cliente": return r.cliente || "";
+    case "Categoría": return r.categoria || "";
+    case "Producto": return r.producto || "";
+    case "Tipo factura": return r.tipoFactura === "credito" ? "Crédito" : "Contado";
+    case "Subtotal": return r.subtotal;
+    case "Costo": return r.costo;
+    case "Descuento": return r.descuentoMonto || 0;
+    case "Utilidad": return r.utilidad;
+    case "Margen %": return r.subtotal > 0 ? r.utilidad / r.subtotal : 0;
+    case "Marca": return r.marca || "";
+    case "Vendedor": return r.vendedor || "";
+    default: return "";
   }
 }
 
 function sortDetalle(col) {
   if (detalleSort.col === col) detalleSort.asc = !detalleSort.asc;
-  else {
-    detalleSort.col = col;
-    detalleSort.asc = true;
-  }
+  else { detalleSort.col = col; detalleSort.asc = true; }
   renderDetalle();
 }
 
 function renderDetalle() {
   if (!detalleTableBody) return;
+  if (!records.length) { detalleTableBody.innerHTML = ""; return; }
 
   const base = filtrarRecords(false);
   let arr = base.slice();
 
+  // filtro: solo márgenes negativos (config rápida)
+  if (quick.negOnly) {
+    arr = arr.filter(r => (r.subtotal > 0 ? (r.utilidad / r.subtotal) : 0) < 0);
+  }
+
   // filtros por columna
   arr = arr.filter(r => {
-    for (const col of detalleColsActivas) {
-      const text = (detalleFiltros[col] || "").trim();
+    for (const col in detalleFiltros) {
+      const text = detalleFiltros[col];
       if (!text) continue;
       const v = getValorDetalle(r, col);
-      const s =
-        typeof v === "number"
-          ? v.toString()
-          : (v || "").toString().toLowerCase();
+      const s = (typeof v === "number") ? v.toString() : (v || "").toString().toLowerCase();
       if (!s.includes(text)) return false;
     }
     return true;
@@ -1205,23 +1515,9 @@ function renderDetalle() {
   // filtro global
   if (detalleBusqueda) {
     arr = arr.filter(r => {
-      const campos = [
-        r.cliente,
-        r.vendedor,
-        r.folio,
-        r.almacen,
-        r.categoria,
-        r.articulo
-      ];
-      return campos.some(
-        c => c && c.toString().toLowerCase().includes(detalleBusqueda)
-      );
+      const campos = [r.cliente, r.vendedor, r.folio, r.almacen, r.categoria, r.producto];
+      return campos.some(c => c && c.toString().toLowerCase().includes(detalleBusqueda));
     });
-  }
-
-  // ocultar márgenes negativos si aplica
-  if (config.hideNegativeMargin) {
-    arr = arr.filter(r => r.subtotal <= 0 || r.utilidad / r.subtotal >= 0);
   }
 
   // orden
@@ -1231,445 +1527,465 @@ function renderDetalle() {
     arr.sort((a, b) => {
       const va = getValorDetalle(a, col);
       const vb = getValorDetalle(b, col);
-      if (typeof va === "number" && typeof vb === "number") {
-        return asc ? va - vb : vb - va;
-      }
+      if (typeof va === "number" && typeof vb === "number") return asc ? va - vb : vb - va;
       const sa = (va || "").toString();
       const sb = (vb || "").toString();
       return asc ? sa.localeCompare(sb) : sb.localeCompare(sa);
     });
   }
 
-  // limitar filas
-  arr = arr.slice(0, config.maxFilasDetalle || 5000);
+  // performance limit
+  const max = cfg.maxDetalleRows || 5000;
+  const view = arr.slice(0, max);
 
   detalleTableBody.innerHTML = "";
-  arr.forEach(r => {
+  view.forEach(r => {
     const tr = document.createElement("tr");
-    tr.classList.add("clickable-row");
-    tr.dataset.origen = r.origen;
-    tr.dataset.folio = r.folio;
-    detalleColsActivas.forEach(col => {
+
+    detalleColsLayout.forEach(col => {
       const td = document.createElement("td");
       let v = getValorDetalle(r, col);
-      if (col === "Subtotal" || col === "Costo" || col === "Utilidad") {
+
+      if (col === "Factura/Nota") {
+        td.classList.add("linkish");
+        td.textContent = v || "";
+        td.addEventListener("click", () => abrirDocumento(r.origen, r.folio));
+      }
+      else if (col === "Subtotal" || col === "Costo" || col === "Utilidad" || col === "Descuento") {
         td.classList.add("text-right");
         const num = toNumber(v);
         td.textContent = formatCurrency(num);
-        if (num < 0 && config.resaltarNegativos) td.classList.add("neg");
-      } else if (col === "Margen %") {
+        if (num < 0) td.classList.add("neg");
+      }
+      else if (col === "Margen %") {
         td.classList.add("text-right");
-        td.textContent = formatPercent(v);
-        if (v < 0 && config.resaltarNegativos) td.classList.add("neg");
-      } else if (col === "Pz.") {
-        td.classList.add("text-right");
-        td.textContent = v || "";
-      } else {
+        const num = typeof v === "number" ? v : toNumber(v);
+        td.textContent = formatPercent(num);
+        if (num < 0) td.classList.add("neg");
+      }
+      else {
         td.textContent = v || "";
       }
+
       tr.appendChild(td);
     });
-    tr.addEventListener("click", () => {
-      abrirDetalleFactura(r.origen, r.folio);
-    });
+
     detalleTableBody.appendChild(tr);
   });
 }
 
-// ==================== MODAL DETALLE FACTURA ====================
+// ==================== MODAL FACTURA / NOTA ====================
 
-function abrirDetalleFactura(origen, folio) {
-  if (!modalFacturaBackdrop) return;
+function abrirDocumento(origen, folio) {
+  if (!docBackdrop || !docBody) return;
 
-  const items = records.filter(
-    r => r.origen === origen && r.folio === folio
-  );
-  if (!items.length) return;
+  const datos = filtrarRecords(false);
+  const lines = datos.filter(r => r.origen === origen && r.folio === folio);
 
-  const r0 = items[0];
-  ultimaFacturaFiltro = { origen, folio, cliente: r0.cliente };
+  if (!lines.length) return;
 
-  modalFacturaTitle.textContent = `Detalle de ${origen === "factura" ? "factura" : "nota"} ${folio}`;
-  const fechaTxt = r0.fecha.toISOString().slice(0, 10);
-  modalFacturaSub.textContent =
-    `Fecha: ${fechaTxt} | Cliente: ${r0.cliente || "(sin cliente)"} | Almacén: ${r0.almacen || ""} | Vendedor: ${r0.vendedor || ""}`;
+  const head = lines[0];
+  const meta = {
+    fecha: head.fecha ? head.fecha.toISOString().slice(0,10) : "",
+    hora: head.hora || "",
+    cliente: head.cliente || "",
+    vendedor: head.vendedor || "",
+    almacen: head.almacen || "",
+    categoria: head.categoria || "",
+    origen,
+    folio
+  };
 
-  modalFacturaTableBody.innerHTML = "";
-  items.forEach(it => {
+  docCtx.origen = origen;
+  docCtx.folio = folio;
+  docCtx.meta = meta;
+
+  docTitle.textContent = `${origen === "factura" ? "Factura" : "Nota"}: ${folio}`;
+  docSub.textContent = `Cliente: ${meta.cliente} | Fecha: ${meta.fecha} ${meta.hora} | Almacén: ${meta.almacen} | Categoría: ${meta.categoria}`;
+
+  // Construir filas del modal
+  docBody.innerHTML = "";
+  docCtx.rows = lines.map(r => {
+    const qty = toNumber(r.cantidad);
+    const precio = toNumber(r.subtotal); // asumimos subtotal por línea sin IVA
+    return {
+      Fecha: r.fecha ? r.fecha.toISOString().slice(0,10) : "",
+      Hora: r.hora || "",
+      Cliente: r.cliente || "",
+      Descripción: r.producto || "",
+      Cantidad: qty,
+      Costo: toNumber(r.costo),
+      "Precio (sin IVA)": precio,
+      Vendedor: r.vendedor || ""
+    };
+  });
+
+  docCtx.rows.forEach(row => {
     const tr = document.createElement("tr");
-    const fechaLinea = it.fecha.toISOString().slice(0, 10);
-    const precioUnit = it.precioUnit || (it.pz > 0 ? it.subtotal / it.pz : 0);
     tr.innerHTML = `
-      <td>${fechaLinea}</td>
-      <td>${it.hora || ""}</td>
-      <td>${it.folio}</td>
-      <td>${it.cliente || ""}</td>
-      <td>${it.articulo || ""}</td>
-      <td class="text-right">${(it.pz || 0).toLocaleString("es-MX")}</td>
-      <td class="text-right">${formatCurrency(it.costo)}</td>
-      <td class="text-right">${formatCurrency(precioUnit)}</td>
-      <td>${it.vendedor || ""}</td>
+      <td>${row["Fecha"]}</td>
+      <td>${row["Hora"]}</td>
+      <td>${row["Cliente"]}</td>
+      <td>${row["Descripción"]}</td>
+      <td class="text-right">${row["Cantidad"].toLocaleString("es-MX")}</td>
+      <td class="text-right">${formatCurrency(row["Costo"])}</td>
+      <td class="text-right">${formatCurrency(row["Precio (sin IVA)"])}</td>
+      <td>${row["Vendedor"]}</td>
     `;
-    modalFacturaTableBody.appendChild(tr);
+    docBody.appendChild(tr);
   });
 
-  modalFacturaBackdrop.classList.add("active");
+  docBackdrop.classList.add("active");
 }
 
-if (modalFacturaClose && modalFacturaBackdrop) {
-  modalFacturaClose.addEventListener("click", () =>
-    modalFacturaBackdrop.classList.remove("active")
-  );
-  modalFacturaBackdrop.addEventListener("click", e => {
-    if (e.target === modalFacturaBackdrop) modalFacturaBackdrop.classList.remove("active");
-  });
+if (docClose && docBackdrop) {
+  docClose.addEventListener("click", () => docBackdrop.classList.remove("active"));
+  docBackdrop.addEventListener("click", e => { if (e.target === docBackdrop) docBackdrop.classList.remove("active"); });
 }
 
-function exportTableToCsv(table, filename) {
-  const rows = Array.from(table.querySelectorAll("tr"));
-  const lines = rows.map(row => {
-    const cells = Array.from(row.querySelectorAll("th,td"));
-    return cells
-      .map(c => {
-        const text = c.textContent.replace(/"/g, '""');
-        return `"${text}"`;
-      })
-      .join(",");
-  });
-  const csv = lines.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+if (docExportXlsx) docExportXlsx.addEventListener("click", () => {
+  if (!docCtx.rows?.length) return;
+  exportJsonToXlsx(docCtx.rows, `Documento_${docCtx.origen}_${docCtx.folio}.xlsx`, "Lineas");
+});
 
-if (modalFacturaExportXls) {
-  modalFacturaExportXls.addEventListener("click", () => {
-    const table = document.getElementById("modal-factura-table");
-    if (!table) return;
-    const name = ultimaFacturaFiltro
-      ? `detalle_${ultimaFacturaFiltro.origen}_${ultimaFacturaFiltro.folio}.csv`
-      : "detalle_factura.csv";
-    exportTableToCsv(table, name);
-  });
-}
+if (docExportPdf) docExportPdf.addEventListener("click", () => {
+  if (!docCtx.rows?.length) return;
+  const headers = ["Fecha","Hora","Cliente","Descripción","Cantidad","Costo","Precio (sin IVA)","Vendedor"];
+  const rows = docCtx.rows.map(r => [
+    r["Fecha"], r["Hora"], r["Cliente"], r["Descripción"],
+    r["Cantidad"], r["Costo"], r["Precio (sin IVA)"], r["Vendedor"]
+  ]);
+  exportTableToPdf(`${docTitle.textContent}`, headers, rows, `Documento_${docCtx.origen}_${docCtx.folio}.pdf`);
+});
 
-if (modalFacturaExportPdf) {
-  modalFacturaExportPdf.addEventListener("click", () => {
-    const table = document.getElementById("modal-factura-table");
-    if (!table) return;
-    const win = window.open("", "_blank");
-    win.document.write("<html><head><title>Detalle factura</title></head><body>");
-    win.document.write("<h3>Detalle de factura / nota</h3>");
-    win.document.write(table.outerHTML);
-    win.document.write("</body></html>");
-    win.document.close();
-    win.focus();
-    win.print();
+if (docGoDetalle) docGoDetalle.addEventListener("click", () => {
+  // Ir al tab Detalle filtrando por folio (en búsqueda global)
+  switchTab("tab-detalle");
+  if (searchGlobalInput) {
+    searchGlobalInput.value = docCtx.folio;
+    detalleBusqueda = docCtx.folio.toLowerCase();
+  }
+  renderDetalle();
+  docBackdrop.classList.remove("active");
+});
+
+// ==================== EXPLORADOR ====================
+
+let explorerCfg = { dim: "almacen", met: "ventas", type: "bar", top: 10 };
+
+function initExplorerUI() {
+  if (expDim) expDim.addEventListener("change", () => { explorerCfg.dim = expDim.value; actualizarExplorador(); });
+  if (expMet) expMet.addEventListener("change", () => { explorerCfg.met = expMet.value; actualizarExplorador(); });
+  if (expType) expType.addEventListener("change", () => { explorerCfg.type = expType.value; actualizarExplorador(); });
+  if (expTop) expTop.addEventListener("change", () => { explorerCfg.top = parseInt(expTop.value,10); actualizarExplorador(); });
+  if (expRefresh) expRefresh.addEventListener("click", actualizarExplorador);
+
+  if (expExportPng) expExportPng.addEventListener("click", () => {
+    chartToPng(charts.explorer, `Explorador_${explorerCfg.dim}_${explorerCfg.met}.png`);
   });
 }
 
-if (modalFacturaVerDetalle) {
-  modalFacturaVerDetalle.addEventListener("click", () => {
-    if (!ultimaFacturaFiltro) return;
-    // ir a tab Detalle y filtrar por factura
-    const tabBtnDetalle = document.querySelector('.tab-btn[data-tab="tab-detalle"]');
-    if (tabBtnDetalle) tabBtnDetalle.click();
+function dimValue(r, dim) {
+  if (dim === "almacen") return r.almacen || "(sin)";
+  if (dim === "categoria") return r.categoria || "(sin)";
+  if (dim === "cliente") return r.cliente || "(sin cliente)";
+  if (dim === "vendedor") return r.vendedor || "(sin vendedor)";
+  if (dim === "marca") return r.marca || "(sin marca)";
+  if (dim === "mes") return monthLabels()[Math.max(0, Math.min(11, (r.mes||1)-1))];
+  return "(sin)";
+}
 
-    detalleFiltros["Factura/Nota"] = ultimaFacturaFiltro.folio.toString().toLowerCase();
-    renderDetalleHeaders(); // reinyecta filtros
+function metricAgg(group, met) {
+  if (met === "ventas") return group.ventas;
+  if (met === "utilidad") return group.utilidad;
+  if (met === "margen") return group.ventas > 0 ? group.utilidad / group.ventas : 0;
+  if (met === "transacciones") return group.ops;
+  if (met === "clientes") return group.clientes;
+  return group.ventas;
+}
+
+function metricLabel(met) {
+  if (met === "ventas") return "Ventas";
+  if (met === "utilidad") return "Utilidad";
+  if (met === "margen") return "Margen %";
+  if (met === "transacciones") return "Transacciones";
+  if (met === "clientes") return "Clientes únicos";
+  return met;
+}
+
+function actualizarExplorador() {
+  const canvas = $("chart-explorer");
+  if (!canvas || !tablaExplorer) return;
+  if (!records.length) return;
+
+  // sincroniza UI
+  if (expDim) expDim.value = explorerCfg.dim;
+  if (expMet) expMet.value = explorerCfg.met;
+  if (expType) expType.value = explorerCfg.type;
+  if (expTop) expTop.value = String(explorerCfg.top);
+
+  const data = filtrarRecords(false);
+
+  const groups = {};
+  const opsByDim = {};
+  const clientsByDim = {};
+
+  data.forEach(r => {
+    const d = dimValue(r, explorerCfg.dim);
+    if (!groups[d]) groups[d] = { ventas: 0, utilidad: 0, ops: 0, clientes: 0 };
+    groups[d].ventas += r.subtotal;
+    if (r.incluirUtilidad) groups[d].utilidad += r.utilidad;
+
+    const opKey = r.origen + "|" + r.folio;
+    if (!opsByDim[d]) opsByDim[d] = new Set();
+    opsByDim[d].add(opKey);
+
+    if (!clientsByDim[d]) clientsByDim[d] = new Set();
+    if (r.cliente) clientsByDim[d].add(r.cliente);
+  });
+
+  Object.keys(groups).forEach(d => {
+    groups[d].ops = (opsByDim[d] || new Set()).size;
+    groups[d].clientes = (clientsByDim[d] || new Set()).size;
+  });
+
+  let list = Object.keys(groups).map(d => ({ d, val: metricAgg(groups[d], explorerCfg.met) }));
+
+  // si es margen, conviene ordenar por valor absoluto? aquí por valor normal
+  list.sort((a,b) => b.val - a.val);
+  list = list.slice(0, explorerCfg.top);
+
+  const labels = list.map(x => x.d);
+  const values = list.map(x => x.val);
+
+  // Tabla
+  expThDim.textContent = explorerCfg.dim.toUpperCase();
+  expThMet.textContent = metricLabel(explorerCfg.met);
+
+  tablaExplorer.innerHTML = "";
+  list.forEach(x => {
+    const tr = document.createElement("tr");
+    const isPct = explorerCfg.met === "margen";
+    tr.innerHTML = `
+      <td class="linkish">${x.d}</td>
+      <td class="text-right">${isPct ? formatPercent(x.val) : formatCurrency(x.val)}</td>
+    `;
+    tr.addEventListener("click", () => drillToDetalle(explorerCfg.dim, x.d));
+    tablaExplorer.appendChild(tr);
+  });
+
+  // Chart
+  if (expTitle) expTitle.textContent = `Explorador: ${explorerCfg.dim} vs ${metricLabel(explorerCfg.met)}`;
+  const ctx = canvas.getContext("2d");
+  if (charts.explorer) charts.explorer.destroy();
+
+  charts.explorer = new Chart(ctx, {
+    type: explorerCfg.type,
+    data: {
+      labels,
+      datasets: [{ label: metricLabel(explorerCfg.met), data: values }]
+    },
+    options: {
+      responsive: true,
+      onClick: (evt, elements) => {
+        if (!elements?.length) return;
+        const i = elements[0].index;
+        const val = labels[i];
+        drillToDetalle(explorerCfg.dim, val);
+      },
+      scales: (explorerCfg.type === "pie" || explorerCfg.type === "doughnut") ? {} : {
+        y: {
+          ticks: {
+            callback: v => (explorerCfg.met === "margen" ? (v*100).toFixed(1) + "%" : v.toLocaleString("es-MX"))
+          }
+        }
+      }
+    }
+  });
+}
+
+function drillToDetalle(dim, value) {
+  // aplica filtros aproximados desde explorador
+  if (dim === "almacen" && filterStore) filterStore.value = almacenesDisponibles.includes(value) ? value : "all";
+  if (dim === "categoria" && filterCategory) filterCategory.value = categoriasDisponibles.includes(value) ? value : "all";
+
+  // para dimensiones no existentes como dropdown, usa búsqueda global
+  if (dim === "cliente" && searchGlobalInput) {
+    switchTab("tab-detalle");
+    searchGlobalInput.value = value;
+    detalleBusqueda = value.toLowerCase();
     renderDetalle();
+    return;
+  }
+  if (dim === "vendedor" && searchGlobalInput) {
+    switchTab("tab-detalle");
+    searchGlobalInput.value = value;
+    detalleBusqueda = value.toLowerCase();
+    renderDetalle();
+    return;
+  }
+  if (dim === "marca" && searchGlobalInput) {
+    switchTab("tab-detalle");
+    searchGlobalInput.value = value;
+    detalleBusqueda = value.toLowerCase();
+    renderDetalle();
+    return;
+  }
 
-    modalFacturaBackdrop.classList.remove("active");
+  // mes: manda a detalle con búsqueda del nombre del mes (simple)
+  if (dim === "mes" && searchGlobalInput) {
+    switchTab("tab-detalle");
+    searchGlobalInput.value = value;
+    detalleBusqueda = value.toLowerCase();
+    renderDetalle();
+    return;
+  }
+
+  switchTab("tab-detalle");
+  renderDetalle();
+}
+
+// ==================== EXPORTS + BOTONES PNG ====================
+
+if (btnExportChartMensual) btnExportChartMensual.addEventListener("click", () => chartToPng(charts.mensual, "Resumen_Mensual.png"));
+if (btnExportChartAlmacen) btnExportChartAlmacen.addEventListener("click", () => chartToPng(charts.almacen, "Resumen_Almacen.png"));
+if (btnExportChartCredito) btnExportChartCredito.addEventListener("click", () => chartToPng(charts.credito, "Credito_vs_Contado.png"));
+if (btnExportChartCategorias) btnExportChartCategorias.addEventListener("click", () => chartToPng(charts.categorias, "Categorias_Top.png"));
+
+// ==================== CONFIG TAB ====================
+
+function initConfigTab() {
+  if (cfgMaxRows) cfgMaxRows.value = String(cfg.maxDetalleRows || 5000);
+  if (cfgSaveView) cfgSaveView.checked = !!cfg.saveView;
+
+  if (cfgMaxRows) cfgMaxRows.addEventListener("change", () => {
+    cfg.maxDetalleRows = parseInt(cfgMaxRows.value, 10) || 5000;
+    saveConfigs();
+    renderDetalle();
+  });
+
+  if (cfgSaveView) cfgSaveView.addEventListener("change", () => {
+    cfg.saveView = !!cfgSaveView.checked;
+    saveConfigs();
+  });
+
+  if (cfgResetView) cfgResetView.addEventListener("click", () => {
+    // reset a defaults (sin borrar archivo cargado)
+    quick = { metric: "ventas", chart: "bar", mode: "normal", negOnly: false };
+    cfg.maxDetalleRows = 5000;
+    detalleColsLayout = [...DETALLE_DEFAULT_COLS];
+    applyQuickToUI();
+    if (cfgMaxRows) cfgMaxRows.value = "5000";
+    renderDetalleHeaders();
+    renderDetalleChips();
+    saveConfigs();
+    actualizarTodo();
+  });
+
+  if (cfgClearStorage) cfgClearStorage.addEventListener("click", () => {
+    clearSaved();
+    // también resetea en memoria
+    quick = { metric: "ventas", chart: "bar", mode: "normal", negOnly: false };
+    cfg.maxDetalleRows = 5000;
+    detalleColsLayout = [...DETALLE_DEFAULT_COLS];
+    applyQuickToUI();
+    if (cfgMaxRows) cfgMaxRows.value = "5000";
+    renderDetalleHeaders();
+    renderDetalleChips();
+    actualizarTodo();
+  });
+
+  if (cfgExportDetalleXlsx) cfgExportDetalleXlsx.addEventListener("click", () => {
+    if (!records.length) return;
+    const data = filtrarRecords(false);
+    const out = data.map(r => ({
+      Año: r.anio,
+      Fecha: r.fecha ? r.fecha.toISOString().slice(0,10) : "",
+      Hora: r.hora || "",
+      Almacén: r.almacen,
+      "Factura/Nota": r.folio,
+      Cliente: r.cliente,
+      Categoría: r.categoria,
+      Producto: r.producto,
+      "Tipo factura": r.tipoFactura === "credito" ? "Crédito" : "Contado",
+      Subtotal: r.subtotal,
+      Costo: r.costo,
+      Descuento: r.descuentoMonto || 0,
+      Utilidad: r.utilidad,
+      "Margen %": r.subtotal > 0 ? (r.utilidad / r.subtotal) : 0,
+      Marca: r.marca,
+      Vendedor: r.vendedor
+    }));
+    exportJsonToXlsx(out, "Detalle_Filtrado.xlsx", "Detalle");
+  });
+
+  if (cfgExportResumenPdf) cfgExportResumenPdf.addEventListener("click", () => {
+    if (!records.length) return;
+
+    const data = filtrarRecords(false);
+    const ventas = sumField(data, "subtotal");
+    const util = sumField(data.filter(r => r.incluirUtilidad), "utilidad");
+    const margen = ventas > 0 ? util / ventas : 0;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+
+    doc.setFontSize(16);
+    doc.text("Resumen de Ventas – El Cedro", 40, 40);
+
+    doc.setFontSize(11);
+    const f = getFiltros();
+    doc.text(`Filtros: Año=${f.year || "Todos"} | Almacén=${f.store || "Todos"} | Tipo=${f.tipo} | Categoría=${f.categoria || "Todas"}`, 40, 60);
+
+    doc.setFontSize(12);
+    doc.text(`Ventas: ${formatCurrency(ventas)}`, 40, 90);
+    doc.text(`Utilidad: ${formatCurrency(util)}`, 40, 110);
+    doc.text(`Margen: ${formatPercent(margen)}`, 40, 130);
+
+    // intenta pegar imágenes de charts (si existen)
+    let y = 160;
+    try {
+      if (charts.mensual) {
+        const img = charts.mensual.toBase64Image();
+        doc.addImage(img, "PNG", 40, y, 520, 200);
+        y += 220;
+      }
+      if (charts.almacen) {
+        const img2 = charts.almacen.toBase64Image();
+        doc.addImage(img2, "PNG", 40, y, 520, 200);
+        y += 220;
+      }
+    } catch {}
+
+    doc.save("Resumen.pdf");
   });
 }
 
 // ==================== TABS ====================
 
+function switchTab(tabId) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+  const panel = $(tabId);
+  if (btn) btn.classList.add("active");
+  if (panel) panel.classList.add("active");
+}
+
 Array.from(document.querySelectorAll(".tab-btn")).forEach(btn => {
   btn.addEventListener("click", () => {
     const tabId = btn.dataset.tab;
-    document
-      .querySelectorAll(".tab-btn")
-      .forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    document
-      .querySelectorAll(".tab-panel")
-      .forEach(p => p.classList.remove("active"));
-    const panel = document.getElementById(tabId);
-    if (panel) panel.classList.add("active");
+    switchTab(tabId);
   });
 });
 
-// Inicializar tabla de detalle vacía
-initDetalleHeaders();
-initDetalleChips();
+// ==================== INICIALIZACIÓN ====================
+
+loadConfigs();
+applyQuickToUI();
+initQuickConfig();
+initConfigTab();
+initDetalleUI();
+initExplorerUI();
 renderDetalle();
-
-// ==================== CONFIG RÁPIDA EVENTOS ====================
-
-if (qcMainMetric) {
-  qcMainMetric.addEventListener("change", () => {
-    config.mainMetric = qcMainMetric.value;
-    saveConfig();
-  });
-}
-if (qcChartType) {
-  qcChartType.addEventListener("change", () => {
-    config.chartType = qcChartType.value;
-    saveConfig();
-    actualizarTodo();
-  });
-}
-if (qcTableMode) {
-  qcTableMode.addEventListener("change", () => {
-    config.tableMode = qcTableMode.value;
-    document.body.classList.toggle("table-comfortable", config.tableMode === "comfortable");
-    saveConfig();
-  });
-}
-if (qcHideNegativeMargin) {
-  qcHideNegativeMargin.addEventListener("change", () => {
-    config.hideNegativeMargin = qcHideNegativeMargin.checked;
-    saveConfig();
-    renderDetalle();
-  });
-}
-
-// CONFIG TAB
-
-if (confMaxFilas) {
-  confMaxFilas.addEventListener("change", () => {
-    const v = parseInt(confMaxFilas.value, 10);
-    if (!isNaN(v) && v > 0) {
-      config.maxFilasDetalle = v;
-      saveConfig();
-      renderDetalle();
-    }
-  });
-}
-
-if (confResaltarNegativos) {
-  confResaltarNegativos.addEventListener("change", () => {
-    config.resaltarNegativos = confResaltarNegativos.checked;
-    saveConfig();
-    renderDetalle();
-  });
-}
-
-if (confGuardarVista) {
-  confGuardarVista.addEventListener("change", () => {
-    config.guardarVista = confGuardarVista.checked;
-    saveConfig();
-  });
-}
-
-if (confReset) {
-  confReset.addEventListener("click", () => {
-    config = {
-      mainMetric: "ventas",
-      chartType: "bar",
-      tableMode: "compact",
-      hideNegativeMargin: false,
-      maxFilasDetalle: 5000,
-      resaltarNegativos: true,
-      guardarVista: true,
-      expDimension: "mes",
-      expMetrica: "subtotal",
-      expChartType: "bar",
-      expExcluirNegativos: true
-    };
-    saveConfig();
-    applyConfigToUI();
-    actualizarTodo();
-  });
-}
-
-// ==================== EXPLORADOR DE GRÁFICOS ====================
-
-function actualizarExplorador() {
-  const canvas = document.getElementById("exp-chart");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-
-  const data = filtrarRecords(false);
-  if (!data.length) return;
-
-  const dimension = config.expDimension;
-  const metrica = config.expMetrica;
-  const chartType = config.expChartType;
-  const excluirNeg = config.expExcluirNegativos;
-
-  const grupos = {};
-
-  function keyAndLabel(r) {
-    if (dimension === "mes") {
-      const idx = r.mes - 1;
-      const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-      return { key: r.mes, label: meses[idx] || r.mes };
-    }
-    if (dimension === "almacen") {
-      const k = r.almacen || "(sin)";
-      return { key: k, label: k };
-    }
-    if (dimension === "categoria") {
-      const k = r.categoria || "(Sin categoría)";
-      return { key: k, label: k };
-    }
-    if (dimension === "vendedor") {
-      const k = r.vendedor || "(Sin vendedor)";
-      return { key: k, label: k };
-    }
-    if (dimension === "cliente") {
-      const k = r.cliente || "(Sin cliente)";
-      return { key: k, label: k };
-    }
-    return { key: "otros", label: "Otros" };
-  }
-
-  const opsSet = {};
-
-  data.forEach(r => {
-    const { key, label } = keyAndLabel(r);
-    if (!grupos[key]) {
-      grupos[key] = {
-        label,
-        ventas: 0,
-        utilidad: 0,
-        ventasCred: 0,
-        ventasTot: 0
-      };
-      opsSet[key] = new Set();
-    }
-    grupos[key].ventas += r.subtotal;
-    if (r.incluirUtilidad) grupos[key].utilidad += r.utilidad;
-    if (r.esCredito) grupos[key].ventasCred += r.subtotal;
-    grupos[key].ventasTot += r.subtotal;
-
-    const opKey = r.origen + "|" + r.folio;
-    opsSet[key].add(opKey);
-  });
-
-  const items = Object.keys(grupos).map(k => {
-    const g = grupos[k];
-    let valor = 0;
-    if (metrica === "subtotal") valor = g.ventas;
-    else if (metrica === "utilidad") valor = g.utilidad;
-    else if (metrica === "margen")
-      valor = g.ventas > 0 ? g.utilidad / g.ventas : 0;
-    else if (metrica === "ops")
-      valor = opsSet[k].size;
-    else if (metrica === "cred_pct")
-      valor = g.ventasTot > 0 ? g.ventasCred / g.ventasTot : 0;
-    return { key: k, label: g.label, valor };
-  });
-
-  let filtrados = items;
-  if (excluirNeg && (metrica === "margen" || metrica === "cred_pct")) {
-    filtrados = items.filter(i => i.valor >= 0);
-  }
-
-  filtrados.sort((a, b) => b.valor - a.valor);
-
-  const labels = filtrados.map(i => i.label);
-  const valores = filtrados.map(i => i.valor);
-
-  if (expChart) expChart.destroy();
-  expChart = new Chart(ctx, {
-    type: chartType,
-    data: {
-      labels,
-      datasets: [{
-        label:
-          metrica === "subtotal" ? "Ventas" :
-          metrica === "utilidad" ? "Utilidad" :
-          metrica === "margen" ? "Margen %" :
-          metrica === "ops" ? "Operaciones" :
-          "% Crédito",
-        data: valores
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const v = ctx.parsed;
-              if (metrica === "subtotal" || metrica === "utilidad") return formatCurrency(v);
-              if (metrica === "margen" || metrica === "cred_pct") return formatPercent(v);
-              return v.toLocaleString("es-MX");
-            }
-          }
-        }
-      },
-      scales: chartType === "pie" || chartType === "doughnut" ? {} : {
-        y: {
-          ticks: {
-            callback: v => {
-              if (metrica === "subtotal" || metrica === "utilidad") return formatCurrency(v);
-              if (metrica === "margen" || metrica === "cred_pct") return formatPercent(v);
-              return v.toLocaleString("es-MX");
-            }
-          }
-        }
-      }
-    }
-  });
-
-  if (expChartTitle) {
-    const dimTxt = {
-      mes: "Mes",
-      almacen: "Almacén",
-      categoria: "Categoría",
-      vendedor: "Vendedor",
-      cliente: "Cliente"
-    }[dimension] || "Dimensión";
-
-    const metTxt = {
-      subtotal: "Ventas (Subtotal)",
-      utilidad: "Utilidad bruta",
-      margen: "Margen %",
-      ops: "Número de operaciones",
-      cred_pct: "% Ventas a crédito"
-    }[metrica] || "Métrica";
-
-    expChartTitle.textContent = `${metTxt} por ${dimTxt}`;
-  }
-}
-
-// eventos explorador
-
-if (expDimensionSel) {
-  expDimensionSel.addEventListener("change", () => {
-    config.expDimension = expDimensionSel.value;
-    saveConfig();
-    actualizarExplorador();
-  });
-}
-if (expMetricaSel) {
-  expMetricaSel.addEventListener("change", () => {
-    config.expMetrica = expMetricaSel.value;
-    saveConfig();
-    actualizarExplorador();
-  });
-}
-if (expChartTypeSel) {
-  expChartTypeSel.addEventListener("change", () => {
-    config.expChartType = expChartTypeSel.value;
-    saveConfig();
-    actualizarExplorador();
-  });
-}
-if (expExcluirNegSel) {
-  expExcluirNegSel.addEventListener("change", () => {
-    config.expExcluirNegativos = expExcluirNegSel.checked;
-    saveConfig();
-    actualizarExplorador();
-  });
-}
