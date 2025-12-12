@@ -7,11 +7,16 @@
 
   <link rel="stylesheet" href="./styles.css?v=1" />
 
-  <!-- SheetJS -->
+  <!-- SheetJS (Excel) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- App -->
+  <script src="./app.js?v=1" defer></script>
 </head>
+
 <body>
   <div class="app">
 
@@ -25,7 +30,7 @@
       </div>
 
       <div class="file-block">
-        <label class="file-label" for="file-input">
+        <label class="file-label">
           <input id="file-input" type="file" accept=".xlsx,.xls" />
           <span>📂 Cargar archivo Excel</span>
         </label>
@@ -269,7 +274,7 @@
       <div class="detail-config">
         <div class="detail-config-text">
           <strong>Encabezados disponibles</strong>
-          <span class="muted">Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas.</span>
+          <span class="muted">Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas de la tabla inferior.</span>
         </div>
         <div id="chips-pool" class="chip-container"></div>
       </div>
@@ -352,7 +357,7 @@
 
   </div>
 
-  <!-- MODAL: MÉTRICA YOY / CATEGORÍAS -->
+  <!-- MODAL: MÉTRICA YOY -->
   <div id="modal-backdrop" class="modal-backdrop">
     <div class="modal">
       <header class="modal-header">
@@ -388,7 +393,7 @@
   <div id="modal2-backdrop" class="modal-backdrop">
     <div class="modal">
       <header class="modal-header">
-        <h2 id="modal2-title">Detalle de factura</h2>
+        <h2 id="modal2-title">Detalle</h2>
         <button id="modal2-close" class="modal-close">✕</button>
       </header>
 
@@ -420,7 +425,5 @@
     </div>
   </div>
 
-  <!-- IMPORTANTE: defer para que el JS corra ya con el DOM listo -->
-  <script src="./app.js?v=1" defer></script>
 </body>
 </html>
