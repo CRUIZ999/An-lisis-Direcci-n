@@ -176,8 +176,8 @@ let detalleFiltros = {};
 let detalleBusqueda = "";
 
 // modal payloads
-let lastMetricModal = null;   // {metricId,yPrev,yCur,dimLabel,rows}
-let lastFacturaModal = null;  // {key,rows}
+let lastMetricModal = null;   // {metricId,yPrev,yCur,dim,rows}
+let lastFacturaModal = null;  // {origen,folio,cliente,rows}
 
 // explorer
 let explorerChart = null;
@@ -250,14 +250,17 @@ function resetView() {
   if (filterCategory) filterCategory.value = "all";
 
   detalleSort = { col: null, asc: true };
-  detalleFiltros = {};
   detalleBusqueda = "";
   if (searchGlobalInput) searchGlobalInput.value = "";
+
+  // resetea filtros por columna
+  detalleFiltros = {};
 
   localStorage.removeItem(LS_KEY);
 
   initDetalleHeaders();
   actualizarTodo();
+  renderExplorer();
 }
 
 // ==================== FILE LOAD ====================
@@ -326,7 +329,7 @@ function handleFile(e) {
 
         const incluirUtilidad = !(flagTexto === "rango" || flagTexto === "base");
 
-        // crédito vs contado (tu lógica original)
+        // crédito vs contado
         let esCredito = false;
         if (toNumber(row["Descuento"]) === 0 && flagTexto !== "base") esCredito = true;
         const tipoFactura = esCredito ? "credito" : "contado";
@@ -553,7 +556,7 @@ function actualizarTodo() {
   actualizarYoY();
   actualizarCreditoVsContado(datos);
 
-  // ✅ CATEGORÍAS: SOLO FACTURAS SIN FILTROS (IGNORA "datos")
+  // ✅ CATEGORÍAS: SOLO FACTURAS SIN FILTROS
   actualizarCategoriasSoloFacturasSinFiltros();
 
   renderDetalle();
@@ -615,6 +618,7 @@ function actualizarChartsResumen(data) {
     data:{ labels:labelsMes, datasets:[{ label:"Ventas", data:ventasMes }]},
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       plugins:{ tooltip:{ callbacks:{ label:(ctx)=> formatCurrency(ctx.raw) } } },
       scales:{ y:{ ticks:{ callback:v=> v.toLocaleString("es-MX") } } }
     }
@@ -643,6 +647,7 @@ function actualizarChartsResumen(data) {
     ]},
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       plugins:{ tooltip:{ callbacks:{ label:(ctx)=>{
         const lab = ctx.dataset.label || "";
         if (lab.toLowerCase().includes("m²")) return `${lab}: ${formatCurrency(ctx.raw)}/m²`;
@@ -717,12 +722,244 @@ function actualizarTop(data) {
 }
 
 // ==================== YOY (MODAL) ====================
-// (tu código de YoY + abrirDetalleMetrica queda igual)
-// --- Pega aquí tu bloque existente de actualizarYoY() y abrirDetalleMetrica() tal como lo tienes ---
-// Nota: No lo cambié porque está bien.
+
+function actualizarYoY() {
+  if (!tablaYoYBody || !thYearPrev || !thYearCurrent) return;
+
+  const datos = filtrarRecords(true); // ignora filtro año
+  if (!datos.length) {
+    tablaYoYBody.innerHTML = "<tr><td colspan='4' class='muted'>No hay datos.</td></tr>";
+    return;
+  }
+  const years = unique(datos.map(r => r.anio)).sort((a,b)=>a-b);
+  if (years.length < 2) {
+    tablaYoYBody.innerHTML = "<tr><td colspan='4' class='muted'>Se requiere al menos 2 años.</td></tr>";
+    return;
+  }
+
+  const yCur = years[years.length - 1];
+  const yPrev = years[years.length - 2];
+
+  thYearPrev.textContent = yPrev;
+  thYearCurrent.textContent = yCur;
+
+  const dataPrev = datos.filter(r => r.anio === yPrev);
+  const dataCur = datos.filter(r => r.anio === yCur);
+
+  const ventasPrev = sumField(dataPrev,"subtotal");
+  const ventasCur = sumField(dataCur,"subtotal");
+
+  const utilPrev = sumField(dataPrev.filter(r=>r.incluirUtilidad),"utilidad");
+  const utilCur = sumField(dataCur.filter(r=>r.incluirUtilidad),"utilidad");
+
+  const mPrev = ventasPrev>0 ? utilPrev/ventasPrev : 0;
+  const mCur = ventasCur>0 ? utilCur/ventasCur : 0;
+
+  const credPrev = sumField(dataPrev.filter(r=>r.esCredito),"subtotal");
+  const credCur = sumField(dataCur.filter(r=>r.esCredito),"subtotal");
+  const pctCredPrev = ventasPrev>0 ? credPrev/ventasPrev : 0;
+  const pctCredCur = ventasCur>0 ? credCur/ventasCur : 0;
+
+  const basePrev = dataPrev.filter(r=>r.incluirUtilidad && r.subtotal>0);
+  const baseCur = dataCur.filter(r=>r.incluirUtilidad && r.subtotal>0);
+  const pctNegPrev = basePrev.length ? basePrev.filter(r=>r.utilidad<0).length/basePrev.length : 0;
+  const pctNegCur = baseCur.length ? baseCur.filter(r=>r.utilidad<0).length/baseCur.length : 0;
+
+  const filtros = getFiltros();
+  const m2Valor = (filtros.store && M2_POR_ALMACEN[filtros.store]) ? M2_POR_ALMACEN[filtros.store] : M2_POR_ALMACEN["Todas"];
+
+  const rows = [
+    { id:"ventas", nombre:"Ventas (Subtotal)", prev:ventasPrev, cur:ventasCur, tipo:"money" },
+    { id:"utilidad", nombre:"Utilidad Bruta", prev:utilPrev, cur:utilCur, tipo:"money" },
+    { id:"margen", nombre:"Margen Bruto %", prev:mPrev, cur:mCur, tipo:"percent" },
+    { id:"pct_credito", nombre:"% Ventas a Crédito", prev:pctCredPrev, cur:pctCredCur, tipo:"percent" },
+    { id:"pct_util_neg", nombre:"% Ventas con Utilidad Negativa", prev:pctNegPrev, cur:pctNegCur, tipo:"percent" },
+    { id:"m2", nombre:"m² disponibles", prev:m2Valor, cur:m2Valor, tipo:"plain" }
+  ];
+
+  tablaYoYBody.innerHTML = "";
+  rows.forEach(r=>{
+    let crec;
+    if (r.prev === 0 && r.cur > 0) crec = 1;
+    else if (r.prev === 0 && r.cur === 0) crec = 0;
+    else crec = (r.cur - r.prev) / (r.prev || 1);
+
+    const crecStr = (crec*100).toFixed(1) + "%";
+    const cls = crec>0 ? "pill pos" : crec<0 ? "pill neg" : "pill neu";
+    const icon = crec>0 ? "▲" : crec<0 ? "▼" : "●";
+
+    const fmt = (v)=>{
+      if (r.tipo==="money") return formatCurrency(v);
+      if (r.tipo==="percent") return formatPercent(v);
+      return Number(v).toLocaleString("es-MX");
+    };
+
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.dataset.metricId = r.id;
+    tr.innerHTML = `
+      <td>${r.nombre}</td>
+      <td class="text-right">${fmt(r.prev)}</td>
+      <td class="text-right">${fmt(r.cur)}</td>
+      <td class="text-right"><span class="${cls}">${icon} ${crecStr}</span></td>
+    `;
+    tr.addEventListener("click", ()=> abrirDetalleMetrica(r.id, yPrev, yCur));
+    tablaYoYBody.appendChild(tr);
+  });
+}
+
+function abrirDetalleMetrica(metricId, yPrev, yCur) {
+  if (!modalBackdrop || !modalTitle || !modalSub || !modalYearPrev || !modalYearCurrent || !modalTableBody) return;
+
+  const datos = filtrarRecords(true);
+  const dataPrev = datos.filter(r => r.anio === yPrev);
+  const dataCur = datos.filter(r => r.anio === yCur);
+
+  modalYearPrev.textContent = yPrev;
+  modalYearCurrent.textContent = yCur;
+
+  let titulo = "";
+  let tipo = "money";
+  let calc = null;
+
+  if (metricId === "ventas") { titulo="Detalle de Ventas (Subtotal) por categoría"; calc = arr => sumField(arr,"subtotal"); }
+  else if (metricId === "utilidad") { titulo="Detalle de Utilidad por categoría"; calc = arr => sumField(arr.filter(r=>r.incluirUtilidad),"utilidad"); }
+  else if (metricId === "margen") {
+    titulo="Detalle de Margen % por categoría"; tipo="percent";
+    calc = arr => {
+      const v = sumField(arr,"subtotal");
+      const u = sumField(arr.filter(r=>r.incluirUtilidad),"utilidad");
+      return v>0 ? u/v : 0;
+    };
+  }
+  else if (metricId === "pct_credito") {
+    titulo="Detalle % Ventas a Crédito por categoría"; tipo="percent";
+    calc = arr => {
+      const vTot = sumField(arr,"subtotal");
+      const vCred = sumField(arr.filter(r=>r.esCredito),"subtotal");
+      return vTot>0 ? vCred/vTot : 0;
+    };
+  }
+  else if (metricId === "pct_util_neg") {
+    titulo="% Ventas con Utilidad Negativa por categoría"; tipo="percent";
+    calc = arr => {
+      const base = arr.filter(r=>r.incluirUtilidad && r.subtotal>0);
+      if (!base.length) return 0;
+      const neg = base.filter(r=>r.utilidad<0).length;
+      return neg/base.length;
+    };
+  }
+  else if (metricId === "m2") {
+    modalTitle.textContent = "Detalle de m² por almacén";
+    modalSub.textContent = "Referencia (config)";
+    modalDimCol.textContent = "Almacén";
+    modalTableBody.innerHTML = "";
+
+    const filas = [];
+    Object.keys(M2_POR_ALMACEN).forEach(k=>{
+      if (k==="Todas") return;
+      filas.push({ cat:k, prev:M2_POR_ALMACEN[k], cur:M2_POR_ALMACEN[k] });
+    });
+
+    filas.forEach(f=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${f.cat}</td>
+        <td class="text-right">${Number(f.prev).toLocaleString("es-MX")}</td>
+        <td class="text-right">${Number(f.cur).toLocaleString("es-MX")}</td>
+        <td class="text-right"><span class="pill neu">● 0.0%</span></td>
+      `;
+      modalTableBody.appendChild(tr);
+    });
+
+    lastMetricModal = { metricId, yPrev, yCur, dim:"Almacén", rows: filas };
+    modalBackdrop.classList.add("active");
+    return;
+  }
+
+  modalTitle.textContent = titulo;
+
+  const filtros = getFiltros();
+  modalSub.textContent = `Filtros: almacén=${filtros.store || "Todos"}, tipo=${filtros.tipo}, categoría=${filtros.categoria || "Todas"}`;
+  modalDimCol.textContent = "Categoría";
+
+  const cats = unique(datos.map(r => r.categoriaNombre || "(Sin categoría)"));
+  const filas = cats.map(cat=>{
+    const aPrev = dataPrev.filter(r => (r.categoriaNombre || "(Sin categoría)") === cat);
+    const aCur = dataCur.filter(r => (r.categoriaNombre || "(Sin categoría)") === cat);
+    return { cat, prev: calc(aPrev), cur: calc(aCur) };
+  });
+
+  const fmt = (v)=>{
+    if (tipo==="money") return formatCurrency(v);
+    if (tipo==="percent") return formatPercent(v);
+    return Number(v).toLocaleString("es-MX");
+  };
+
+  modalTableBody.innerHTML = "";
+  filas.sort((a,b)=>b.cur-a.cur).forEach(f=>{
+    let crec;
+    if (f.prev === 0 && f.cur > 0) crec = 1;
+    else if (f.prev === 0 && f.cur === 0) crec = 0;
+    else crec = (f.cur - f.prev) / (f.prev || 1);
+
+    const crecStr = (crec*100).toFixed(1) + "%";
+    const cls = crec>0 ? "pill pos" : crec<0 ? "pill neg" : "pill neu";
+    const icon = crec>0 ? "▲" : crec<0 ? "▼" : "●";
+
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.innerHTML = `
+      <td>${f.cat}</td>
+      <td class="text-right">${fmt(f.prev)}</td>
+      <td class="text-right">${fmt(f.cur)}</td>
+      <td class="text-right"><span class="${cls}">${icon} ${crecStr}</span></td>
+    `;
+
+    // click en categoría del modal => ir a Detalle filtrado por esa categoría
+    tr.addEventListener("click", () => {
+      if (filterCategory) filterCategory.value = f.cat;
+      onFilterChange();
+      document.querySelector(`.tab-btn[data-tab="tab-detalle"]`)?.click();
+      modalBackdrop.classList.remove("active");
+    });
+
+    modalTableBody.appendChild(tr);
+  });
+
+  lastMetricModal = { metricId, yPrev, yCur, dim:"Categoría", rows: filas };
+  modalBackdrop.classList.add("active");
+}
 
 // ==================== CRÉDITO VS CONTADO ====================
-// (tu código existente de actualizarCreditoVsContado queda igual)
+
+function actualizarCreditoVsContado(data) {
+  if (!tablaCredit || !chartCreditCanvas) return;
+
+  const vCred = sumField(data.filter(r=>r.tipoFactura==="credito"), "subtotal");
+  const vCont = sumField(data.filter(r=>r.tipoFactura==="contado"), "subtotal");
+  const total = vCred + vCont || 1;
+
+  tablaCredit.innerHTML = `
+    <tr><td>Crédito</td><td class="text-right">${formatCurrency(vCred)}</td><td class="text-right">${formatPercent(vCred/total)}</td></tr>
+    <tr><td>Contado</td><td class="text-right">${formatCurrency(vCont)}</td><td class="text-right">${formatPercent(vCont/total)}</td></tr>
+    <tr><td><strong>Total</strong></td><td class="text-right"><strong>${formatCurrency(vCred+vCont)}</strong></td><td class="text-right">—</td></tr>
+  `;
+
+  if (charts.credit) charts.credit.destroy();
+  charts.credit = new Chart(chartCreditCanvas.getContext("2d"), {
+    type:"doughnut",
+    data:{
+      labels:["Crédito","Contado"],
+      datasets:[{ data:[vCred, vCont] }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{ tooltip:{ callbacks:{ label:(ctx)=> `${ctx.label}: ${formatCurrency(ctx.raw)}` } } }
+    }
+  });
+}
 
 // ==================== CATEGORÍAS (SOLO FACTURAS, SIN FILTROS) ====================
 
@@ -730,7 +967,7 @@ function actualizarCategoriasSoloFacturasSinFiltros() {
   if (!chartCatsCanvas || !tablaCats) return;
   if (!records.length) return;
 
-  const data = records.filter(r => r.origen === "factura"); // ✅ SOLO FACTURAS
+  const data = records.filter(r => r.origen === "factura");
   const map = {};
   data.forEach(r=>{
     const c = r.categoriaNombre || "(Sin categoría)";
@@ -756,7 +993,6 @@ function actualizarCategoriasSoloFacturasSinFiltros() {
       <td class="text-right ${highlightNeg && r.margen<0 ? "neg" : ""}">${formatPercent(r.margen)}</td>
     `;
     tr.addEventListener("click", ()=>{
-      // manda al detalle filtrado por categoría (ahora sí respetando tus filtros globales si quieres)
       if (filterCategory) filterCategory.value = r.cat;
       onFilterChange();
       document.querySelector(`.tab-btn[data-tab="tab-detalle"]`)?.click();
@@ -771,6 +1007,7 @@ function actualizarCategoriasSoloFacturasSinFiltros() {
     data:{ labels: top.map(x=>x.cat), datasets:[{ label:"Ventas", data: top.map(x=>x.ventas) }]},
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       onClick:(evt,elements)=>{
         if (!elements?.length) return;
         const idx = elements[0].index;
@@ -813,7 +1050,7 @@ function initDetalleChips() {
 function initDetalleHeaders() {
   if (!detalleHeaderRow || !detalleFilterRow) return;
 
-  // ✅ NO borres filtros cada vez
+  // ✅ NO perder filtros al cambiar columnas
   const prevFiltros = { ...detalleFiltros };
 
   detalleHeaderRow.innerHTML = "";
@@ -858,8 +1095,6 @@ function initDetalleHeaders() {
     inp.type = "text";
     inp.className = "filter-input";
     inp.placeholder = "Filtrar...";
-
-    // ✅ recupera filtro anterior para esa col
     inp.value = prevFiltros[col] || "";
 
     inp.addEventListener("input", debounce(()=>{
@@ -871,7 +1106,7 @@ function initDetalleHeaders() {
     detalleFilterRow.appendChild(thF);
   });
 
-  // ✅ reconstruye el objeto de filtros solo con las columnas actuales (sin perder valores)
+  // reconstruye solo con las columnas actuales
   detalleFiltros = {};
   selectedCols.forEach(col => { detalleFiltros[col] = (prevFiltros[col] || ""); });
 }
@@ -991,11 +1226,214 @@ function renderDetalle() {
   });
 }
 
+if (btnExportDetalle) {
+  btnExportDetalle.addEventListener("click", () => {
+    if (!window.XLSX) return;
+    const arr = filtrarRecords(false);
+    const rows = arr.map(r=>{
+      const out = {};
+      selectedCols.forEach(col => { out[col] = getValorDetalle(r,col); });
+      return out;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Detalle");
+    XLSX.writeFile(wb, "detalle.xlsx");
+  });
+}
+
 // ==================== MODAL FACTURA (LÍNEAS) ====================
-// (tu código existente queda igual)
+
+function abrirDetalleFactura(origen, folio, clienteHint) {
+  if (!modal2Backdrop || !modal2Title || !modal2Sub || !modal2Tbody) return;
+
+  const rows = records.filter(r => r.origen === origen && r.folio === folio);
+  if (!rows.length) return;
+
+  const cliente = rows[0].cliente || clienteHint || "";
+  modal2Title.textContent = `Detalle de ${origen === "factura" ? "Factura" : "Nota"}: ${folio}`;
+  modal2Sub.textContent = `Cliente: ${cliente} | Líneas: ${rows.length.toLocaleString("es-MX")}`;
+
+  modal2Tbody.innerHTML = "";
+  rows.forEach(r=>{
+    const precioSinIva = (r.cantidad > 0) ? (r.subtotal / r.cantidad) : 0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${yyyymmdd(r.fecha)}</td>
+      <td>${r.hora || ""}</td>
+      <td>${r.cliente || ""}</td>
+      <td>${r.producto || ""}</td>
+      <td class="text-right">${Number(r.cantidad || 0).toLocaleString("es-MX")}</td>
+      <td class="text-right">${formatCurrency(r.costo || 0)}</td>
+      <td class="text-right">${formatCurrency(precioSinIva)}</td>
+      <td>${r.vendedor || ""}</td>
+    `;
+    modal2Tbody.appendChild(tr);
+  });
+
+  lastFacturaModal = { origen, folio, cliente, rows };
+  modal2Backdrop.classList.add("active");
+}
 
 // ==================== EXPLORER ====================
-// (tu código existente queda igual)
+
+function initExplorerUI() {
+  if (!expDim || !expMetric || !expType) return;
+
+  expDim.innerHTML = "";
+  [
+    { v:"almacen", t:"Almacén" },
+    { v:"categoria", t:"Categoría" },
+    { v:"cliente", t:"Cliente" },
+    { v:"vendedor", t:"Vendedor" },
+    { v:"marca", t:"Marca" },
+    { v:"mes", t:"Mes" }
+  ].forEach(o=>{
+    const opt = document.createElement("option");
+    opt.value = o.v;
+    opt.textContent = o.t;
+    expDim.appendChild(opt);
+  });
+
+  expMetric.innerHTML = "";
+  [
+    { v:"ventas", t:"Ventas (Subtotal)" },
+    { v:"utilidad", t:"Utilidad" },
+    { v:"margen", t:"Margen %" },
+    { v:"trans", t:"Transacciones (únicas)" }
+  ].forEach(o=>{
+    const opt = document.createElement("option");
+    opt.value = o.v;
+    opt.textContent = o.t;
+    expMetric.appendChild(opt);
+  });
+
+  expType.innerHTML = "";
+  [
+    { v:"bar", t:"Barras" },
+    { v:"pie", t:"Pastel" },
+    { v:"doughnut", t:"Dona" }
+  ].forEach(o=>{
+    const opt = document.createElement("option");
+    opt.value = o.v;
+    opt.textContent = o.t;
+    expType.appendChild(opt);
+  });
+}
+
+function getDimValue(r, dim) {
+  if (dim === "almacen") return r.almacen || "(sin)";
+  if (dim === "categoria") return r.categoriaNombre || "(sin)";
+  if (dim === "cliente") return r.cliente || "(sin)";
+  if (dim === "vendedor") return r.vendedor || "(sin)";
+  if (dim === "marca") return r.marca || "(sin)";
+  if (dim === "mes") return String(r.mes).padStart(2, "0");
+  return "(sin)";
+}
+
+function calcMetric(list, metric) {
+  if (metric === "ventas") return sumField(list, "subtotal");
+  if (metric === "utilidad") return sumField(list.filter(x => x.incluirUtilidad), "utilidad");
+  if (metric === "margen") {
+    const v = sumField(list, "subtotal");
+    const u = sumField(list.filter(x => x.incluirUtilidad), "utilidad");
+    return v > 0 ? (u / v) : 0;
+  }
+  if (metric === "trans") {
+    const s = new Set(list.map(x => x.origen + "|" + x.folio));
+    return s.size;
+  }
+  return 0;
+}
+
+function renderExplorer() {
+  if (!expCanvas || !expDim || !expMetric || !expType) return;
+  if (!records.length) return;
+
+  const dim = expDim.value;
+  const metric = expMetric.value;
+  const type = expType.value;
+
+  const data = filtrarRecords(false);
+
+  const groups = {};
+  data.forEach(r=>{
+    const k = getDimValue(r, dim);
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(r);
+  });
+
+  const rows = Object.keys(groups).map(k=>({ key:k, value: calcMetric(groups[k], metric) }));
+  rows.sort((a,b)=>b.value-a.value);
+  const top = rows.slice(0, 20);
+
+  expLastTable = top;
+  expLastDim = dim;
+
+  if (expColDim) expColDim.textContent = expDim.options[expDim.selectedIndex].textContent;
+
+  // table
+  if (expTableBody) {
+    expTableBody.innerHTML = "";
+    top.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.style.cursor = "pointer";
+      const vtxt =
+        metric === "margen" ? formatPercent(r.value) :
+        metric === "trans" ? Number(r.value).toLocaleString("es-MX") :
+        formatCurrency(Number(r.value));
+
+      tr.innerHTML = `<td>${r.key}</td><td class="text-right">${vtxt}</td>`;
+      tr.addEventListener("click", ()=> explorerDrillToDetalle(r.key));
+      expTableBody.appendChild(tr);
+    });
+  }
+
+  // chart
+  const ctx = expCanvas.getContext("2d");
+  if (explorerChart) explorerChart.destroy();
+
+  explorerChart = new Chart(ctx, {
+    type,
+    data:{
+      labels: top.map(x=>x.key),
+      datasets:[{ label:"Valor", data: top.map(x=>x.value) }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      onClick:(evt, elements)=>{
+        if (!elements?.length) return;
+        const idx = elements[0].index;
+        const label = explorerChart.data.labels[idx];
+        explorerDrillToDetalle(label);
+      },
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label:(ctx)=>{
+              const v = ctx.raw;
+              if (metric==="margen") return formatPercent(v);
+              if (metric==="trans") return `${Number(v).toLocaleString("es-MX")} ops`;
+              return formatCurrency(Number(v));
+            }
+          }
+        }
+      },
+      scales: type === "bar" ? { y:{ ticks:{ callback:v=> v.toLocaleString("es-MX") } } } : {}
+    }
+  });
+}
+
+function explorerDrillToDetalle(value) {
+  document.querySelector(`.tab-btn[data-tab="tab-detalle"]`)?.click();
+
+  if (searchGlobalInput) {
+    searchGlobalInput.value = value;
+    detalleBusqueda = value.toLowerCase();
+    renderDetalle();
+  }
+}
 
 // ==================== DOWNLOAD CHART PNG ====================
 
@@ -1091,9 +1529,10 @@ window.addEventListener("DOMContentLoaded", () => {
   btnPrint = document.getElementById("btn-print");
   btnClearStorage = document.getElementById("btn-clear-storage");
 
-  // listeners base
+  // tabs
   bindTabs();
 
+  // listeners
   if (fileInput) fileInput.addEventListener("change", handleFile);
 
   if (filterYear) filterYear.addEventListener("change", onFilterChange);
@@ -1106,13 +1545,13 @@ window.addEventListener("DOMContentLoaded", () => {
       highlightNeg = !!toggleNeg.checked;
       saveView();
       renderDetalle();
-      actualizarCategoriasSoloFacturasSinFiltros(); // ✅ refresca tab categorías también
+      actualizarCategoriasSoloFacturasSinFiltros();
     });
   }
 
   if (btnResetView) btnResetView.addEventListener("click", resetView);
 
-  // ✅ listener global search SOLO UNA VEZ (no en initDetalleHeaders)
+  // global search SOLO una vez
   if (searchGlobalInput) {
     searchGlobalInput.addEventListener("input", debounce(()=>{
       detalleBusqueda = searchGlobalInput.value.toLowerCase();
@@ -1120,7 +1559,91 @@ window.addEventListener("DOMContentLoaded", () => {
     }, 200));
   }
 
-  // download buttons
+  // modals close
+  if (modalClose && modalBackdrop) {
+    modalClose.addEventListener("click", () => modalBackdrop.classList.remove("active"));
+    modalBackdrop.addEventListener("click", (e)=>{ if (e.target === modalBackdrop) modalBackdrop.classList.remove("active"); });
+  }
+  if (modal2Close && modal2Backdrop) {
+    modal2Close.addEventListener("click", ()=> modal2Backdrop.classList.remove("active"));
+    modal2Backdrop.addEventListener("click", (e)=>{ if (e.target === modal2Backdrop) modal2Backdrop.classList.remove("active"); });
+  }
+
+  // modal buttons
+  if (btnModalToDetalle) {
+    btnModalToDetalle.addEventListener("click", () => {
+      document.querySelector(`.tab-btn[data-tab="tab-detalle"]`)?.click();
+      modalBackdrop?.classList.remove("active");
+    });
+  }
+  if (btnModalExportXlsx) {
+    btnModalExportXlsx.addEventListener("click", () => {
+      if (!lastMetricModal || !window.XLSX) return;
+      const ws = XLSX.utils.json_to_sheet(lastMetricModal.rows.map(r => ({
+        Dimension: r.cat,
+        [lastMetricModal.yPrev]: r.prev,
+        [lastMetricModal.yCur]: r.cur
+      })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Detalle_Metrica");
+      XLSX.writeFile(wb, `detalle_metrica_${lastMetricModal.metricId}.xlsx`);
+    });
+  }
+  if (btnModalExportPdf) btnModalExportPdf.addEventListener("click", () => window.print());
+
+  if (btnModal2ToDetalle) {
+    btnModal2ToDetalle.addEventListener("click", () => {
+      if (!lastFacturaModal) return;
+      document.querySelector(`.tab-btn[data-tab="tab-detalle"]`)?.click();
+      if (searchGlobalInput) {
+        searchGlobalInput.value = lastFacturaModal.folio;
+        detalleBusqueda = lastFacturaModal.folio.toLowerCase();
+        renderDetalle();
+      }
+      modal2Backdrop?.classList.remove("active");
+    });
+  }
+  if (btnModal2ExportXlsx) {
+    btnModal2ExportXlsx.addEventListener("click", () => {
+      if (!lastFacturaModal || !window.XLSX) return;
+      const data = lastFacturaModal.rows.map(r=>{
+        const precioSinIva = (r.cantidad > 0) ? (r.subtotal / r.cantidad) : 0;
+        return {
+          Fecha: yyyymmdd(r.fecha),
+          Hora: r.hora || "",
+          Cliente: r.cliente || "",
+          Producto: r.producto || "",
+          Cantidad: r.cantidad || 0,
+          Costo: r.costo || 0,
+          "Precio sin IVA": precioSinIva,
+          Vendedor: r.vendedor || ""
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Factura");
+      XLSX.writeFile(wb, `factura_${lastFacturaModal.folio}.xlsx`);
+    });
+  }
+  if (btnModal2ExportPdf) btnModal2ExportPdf.addEventListener("click", () => window.print());
+
+  // explorer buttons
+  if (expGenerate) expGenerate.addEventListener("click", renderExplorer);
+  if (expToDetalle) expToDetalle.addEventListener("click", ()=>{
+    if (!expLastTable.length) return;
+    explorerDrillToDetalle(expLastTable[0].key);
+  });
+  if (expExportXlsx) {
+    expExportXlsx.addEventListener("click", ()=>{
+      if (!window.XLSX) return;
+      const ws = XLSX.utils.json_to_sheet(expLastTable.map(r=>({ Dimension:r.key, Valor:r.value })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Explorador");
+      XLSX.writeFile(wb, "explorador.xlsx");
+    });
+  }
+
+  // download buttons (charts)
   document.querySelectorAll("[data-download-chart]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const id = btn.getAttribute("data-download-chart");
