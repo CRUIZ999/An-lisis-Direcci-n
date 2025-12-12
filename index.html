@@ -25,7 +25,7 @@
       </div>
 
       <div class="file-block">
-        <label class="file-label">
+        <label class="file-label" for="file-input">
           <input id="file-input" type="file" accept=".xlsx,.xls" />
           <span>📂 Cargar archivo Excel</span>
         </label>
@@ -234,7 +234,7 @@
       <div class="grid-2">
         <div class="chart-card">
           <div class="chart-head">
-            <h3>Top categorías por ventas</h3>
+            <h3>Top categorías por ventas (solo Facturas, sin filtros)</h3>
             <button class="btn btn-ghost" data-download-chart="chart-cats">Descargar PNG</button>
           </div>
           <canvas id="chart-cats"></canvas>
@@ -269,7 +269,7 @@
       <div class="detail-config">
         <div class="detail-config-text">
           <strong>Encabezados disponibles</strong>
-          <span class="muted">Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas de la tabla inferior.</span>
+          <span class="muted">Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas.</span>
         </div>
         <div id="chips-pool" class="chip-container"></div>
       </div>
@@ -420,6 +420,7 @@
     </div>
   </div>
 
+  <!-- IMPORTANTE: defer para que el JS corra ya con el DOM listo -->
   <script src="./app.js?v=1" defer></script>
 </body>
 </html>
