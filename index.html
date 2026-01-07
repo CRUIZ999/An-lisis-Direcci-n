@@ -1,247 +1,429 @@
-<!doctype html>
-<html lang="es-MX">
+<!DOCTYPE html>
+<html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Maestro Inventarios | El Cedro</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8" />
+  <title>Dashboard de Ventas – El Cedro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- SheetJS (XLSX) -->
-  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="./styles.css?v=1" />
+
+  <!-- SheetJS (Excel) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <!-- Chart.js -->
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-  <script defer src="app.js"></script>
+  <!-- App -->
+  <script src="./app.js?v=1" defer></script>
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">EC</div>
-      <div>
-        <div class="title">Maestro Inventarios</div>
-        <div class="subtitle">Carga tu archivo (XLSX/CSV) y analiza por sucursal</div>
+  <div class="app">
+
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="title-block">
+        <h1>Dashboard de Ventas</h1>
+        <p class="subtitle">
+          Carga un archivo Excel (hojas <strong>facturas</strong> y <strong>notas</strong>) para analizar ventas, utilidad, márgenes y detalle por factura.
+        </p>
+      </div>
+
+      <div class="file-block">
+        <label class="file-label">
+          <input id="file-input" type="file" accept=".xlsx,.xls" />
+          <span>📂 Cargar archivo Excel</span>
+        </label>
+        <div id="file-name" class="file-name">Ningún archivo seleccionado</div>
+      </div>
+    </header>
+
+    <!-- FILTROS -->
+    <section class="filters-bar">
+      <div class="filter-group">
+        <label for="filter-year">Año:</label>
+        <select id="filter-year" disabled>
+          <option value="all">Todos los años</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filter-store">Almacén:</label>
+        <select id="filter-store" disabled>
+          <option value="all">Todos los almacenes</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filter-type">Tipo de factura:</label>
+        <select id="filter-type" disabled>
+          <option value="both">Contado + Crédito</option>
+          <option value="contado">Solo contado</option>
+          <option value="credito">Solo crédito</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filter-category">Categoría:</label>
+        <select id="filter-category" disabled>
+          <option value="all">Todas las categorías</option>
+        </select>
+      </div>
+
+      <div class="qc-right">
+        <label class="qc-checkbox">
+          <input id="toggle-neg" type="checkbox" checked />
+          <span>Resaltar negativos</span>
+        </label>
+        <button id="btn-reset-view" class="btn btn-ghost">Reset vista</button>
+      </div>
+    </section>
+
+    <div id="error" class="error"></div>
+
+    <!-- TABS -->
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
+      <button class="tab-btn" data-tab="tab-yoy">Comparativo YoY</button>
+      <button class="tab-btn" data-tab="tab-credit">Crédito vs Contado</button>
+      <button class="tab-btn" data-tab="tab-categorias">Categorías</button>
+      <button class="tab-btn" data-tab="tab-detalle">Detalle de datos</button>
+      <button class="tab-btn" data-tab="tab-explorer">Explorador de gráficos</button>
+      <button class="tab-btn" data-tab="tab-config">Configuración</button>
+    </nav>
+
+    <!-- TAB: RESUMEN -->
+    <main id="tab-resumen" class="tab-panel active">
+      <section class="kpi-grid">
+        <article class="kpi-card">
+          <h3>Ventas</h3>
+          <div id="kpi-ventas" class="kpi-main">$0</div>
+          <p id="kpi-ventas-sub" class="kpi-sub">Periodo: —</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Utilidad bruta</h3>
+          <div id="kpi-utilidad" class="kpi-main">$0</div>
+          <p id="kpi-utilidad-sub" class="kpi-sub">—</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Margen bruto %</h3>
+          <div id="kpi-margen" class="kpi-main">0.0%</div>
+          <p id="kpi-margen-sub" class="kpi-sub">—</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Ventas por m²</h3>
+          <div id="kpi-m2" class="kpi-main">$0/m²</div>
+          <p id="kpi-m2-sub" class="kpi-sub">—</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Transacciones</h3>
+          <div id="kpi-trans" class="kpi-main">0</div>
+          <p class="kpi-sub">Facturas + notas (únicas)</p>
+        </article>
+
+        <article class="kpi-card">
+          <h3>Clientes únicos</h3>
+          <div id="kpi-clientes" class="kpi-main">0</div>
+          <p class="kpi-sub">En el periodo filtrado</p>
+        </article>
+      </section>
+
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-head">
+            <h3>Ventas por mes</h3>
+            <button class="btn btn-ghost" data-download-chart="chart-mensual">Descargar PNG</button>
+          </div>
+          <canvas id="chart-mensual"></canvas>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-head">
+            <h3>Ventas y ventas por m² por almacén</h3>
+            <button class="btn btn-ghost" data-download-chart="chart-almacen">Descargar PNG</button>
+          </div>
+          <canvas id="chart-almacen"></canvas>
+        </div>
+      </section>
+
+      <section class="tables-grid">
+        <div class="table-card">
+          <h3>Top 5 clientes por ventas</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-top-clientes"></tbody>
+          </table>
+        </div>
+
+        <div class="table-card">
+          <h3>Top 5 vendedores por ventas</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Vendedor</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Operaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-top-vendedores"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB: YOY -->
+    <main id="tab-yoy" class="tab-panel">
+      <p class="muted">
+        Comparación del último año vs el anterior aplicando filtros de almacén, tipo de factura y categoría.
+        El filtro de año se ignora aquí. Haz clic en una métrica para ver detalle.
+      </p>
+
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Métrica</th>
+              <th id="th-year-prev" class="text-right">Año N-1</th>
+              <th id="th-year-current" class="text-right">Año N</th>
+              <th class="text-right">Crecimiento %</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-yoy"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- TAB: CRÉDITO VS CONTADO -->
+    <main id="tab-credit" class="tab-panel">
+      <div class="grid-2">
+        <div class="chart-card">
+          <div class="chart-head">
+            <h3>Ventas Crédito vs Contado</h3>
+            <button class="btn btn-ghost" data-download-chart="chart-credit">Descargar PNG</button>
+          </div>
+          <canvas id="chart-credit"></canvas>
+        </div>
+
+        <div class="table-card">
+          <h3>Resumen</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">% del total</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-credit"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB: CATEGORÍAS -->
+    <main id="tab-categorias" class="tab-panel">
+      <div class="grid-2">
+        <div class="chart-card">
+          <div class="chart-head">
+            <h3>Top categorías por ventas (solo Facturas, sin filtros)</h3>
+            <button class="btn btn-ghost" data-download-chart="chart-cats">Descargar PNG</button>
+          </div>
+          <canvas id="chart-cats"></canvas>
+          <p class="muted">Click en una barra para ir a Detalle filtrado por esa categoría.</p>
+        </div>
+
+        <div class="table-card">
+          <h3>Tabla de categorías</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th class="text-right">Ventas</th>
+                <th class="text-right">Utilidad</th>
+                <th class="text-right">Margen %</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-cats"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB: DETALLE -->
+    <main id="tab-detalle" class="tab-panel">
+      <div class="detalle-header">
+        <label for="search-global">Buscar (cliente / producto / factura):</label>
+        <input id="search-global" type="text" placeholder="Escribe texto para filtrar..." />
+        <button id="btn-export-detalle" class="btn btn-ghost">Exportar Excel</button>
+      </div>
+
+      <div class="detail-config">
+        <div class="detail-config-text">
+          <strong>Encabezados disponibles</strong>
+          <span class="muted">Arrastra un encabezado y suéltalo sobre cualquiera de las 7 columnas de la tabla inferior.</span>
+        </div>
+        <div id="chips-pool" class="chip-container"></div>
+      </div>
+
+      <div class="table-card wide">
+        <table>
+          <thead>
+            <tr id="detalle-header-row"></tr>
+            <tr id="detalle-filter-row"></tr>
+          </thead>
+          <tbody id="tabla-detalle"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- TAB: EXPLORADOR -->
+    <main id="tab-explorer" class="tab-panel">
+      <div class="table-card">
+        <h3>Explorador</h3>
+
+        <div class="row">
+          <div class="field">
+            <label>Dimensión</label>
+            <select id="exp-dim"></select>
+          </div>
+
+          <div class="field">
+            <label>Métrica</label>
+            <select id="exp-metric"></select>
+          </div>
+
+          <div class="field">
+            <label>Tipo</label>
+            <select id="exp-type"></select>
+          </div>
+
+          <button id="exp-generate" class="btn">Generar</button>
+          <button id="exp-export-xlsx" class="btn btn-ghost">Exportar Excel</button>
+          <button id="exp-to-detalle" class="btn btn-ghost">Ir a Detalle</button>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <h3>Gráfica</h3>
+          <button class="btn btn-ghost" data-download-chart="chart-explorer">Descargar PNG</button>
+        </div>
+        <canvas id="chart-explorer"></canvas>
+        <p class="muted">Click en una barra/segmento para mandar a Detalle filtrado por ese valor.</p>
+      </div>
+
+      <div class="table-card wide">
+        <h3>Tabla del explorador</h3>
+        <table>
+          <thead>
+            <tr>
+              <th id="exp-col-dim">Dimensión</th>
+              <th class="text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody id="exp-table"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- TAB: CONFIG -->
+    <main id="tab-config" class="tab-panel">
+      <div class="table-card">
+        <h3>Configuración</h3>
+        <p class="muted">
+          Tu vista se guarda automáticamente en este navegador (localStorage). Usa “Reset vista” si quieres volver a defaults.
+        </p>
+
+        <div class="row">
+          <button id="btn-print" class="btn">Exportar PDF (imprimir)</button>
+          <button id="btn-clear-storage" class="btn btn-ghost">Borrar configuración guardada</button>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- MODAL: MÉTRICA YOY -->
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <header class="modal-header">
+        <h2 id="modal-title">Detalle</h2>
+        <button id="modal-close" class="modal-close">✕</button>
+      </header>
+
+      <p id="modal-sub" class="muted"></p>
+
+      <div class="modal-toolbar">
+        <button id="btn-modal-to-detalle" class="btn">Ir a Detalle</button>
+        <button id="btn-modal-export-xlsx" class="btn btn-ghost">Exportar Excel</button>
+        <button id="btn-modal-export-pdf" class="btn btn-ghost">Exportar PDF</button>
+      </div>
+
+      <div class="table-card">
+        <table id="modal-table">
+          <thead>
+            <tr>
+              <th id="modal-dim-col">Categoría</th>
+              <th id="modal-year-prev" class="text-right">Año N-1</th>
+              <th id="modal-year-current" class="text-right">Año N</th>
+              <th class="text-right">Crecimiento %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
+  </div>
 
-    <div class="actions">
-      <label class="upload">
-        <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" />
-        <span>📤 Cargar archivo</span>
-      </label>
-      <button id="btnClear" class="btn secondary" disabled>Limpiar</button>
+  <!-- MODAL: DETALLE FACTURA -->
+  <div id="modal2-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <header class="modal-header">
+        <h2 id="modal2-title">Detalle</h2>
+        <button id="modal2-close" class="modal-close">✕</button>
+      </header>
+
+      <p id="modal2-sub" class="muted"></p>
+
+      <div class="modal-toolbar">
+        <button id="btn-modal2-to-detalle" class="btn">Ir a Detalle filtrado</button>
+        <button id="btn-modal2-export-xlsx" class="btn btn-ghost">Exportar Excel</button>
+        <button id="btn-modal2-export-pdf" class="btn btn-ghost">Exportar PDF</button>
+      </div>
+
+      <div class="table-card">
+        <table id="modal2-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Producto</th>
+              <th class="text-right">Cantidad</th>
+              <th class="text-right">Costo</th>
+              <th class="text-right">Precio sin IVA</th>
+              <th>Vendedor</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
-  </header>
+  </div>
 
-  <main class="container">
-    <section id="status" class="card status">
-      <div class="status-left">
-        <div class="status-title">Estado</div>
-        <div id="statusMsg" class="status-msg">Carga un archivo para comenzar.</div>
-        <div id="statusMeta" class="status-meta"></div>
-      </div>
-      <div class="status-right">
-        <div class="pill" id="pillPrivacy">✅ Procesamiento local (no se sube a internet)</div>
-      </div>
-    </section>
-
-    <section class="card tabs">
-      <button id="tabSummary" class="tab active" disabled>Resumen General</button>
-      <button id="tabDetail" class="tab" disabled>Detalle por Sucursal</button>
-      <div class="tab-note">Clic para cambiar de vista</div>
-    </section>
-
-    <!-- ================== RESUMEN GENERAL ================== -->
-    <section id="summaryView" class="view">
-      <section class="card kpis">
-        <div class="card-header">
-          <h2>Foto General</h2>
-          <div class="hint">Umbrales: Riesgo &lt; 15 días • Sobreinventario &gt; 60 días</div>
-        </div>
-
-        <div class="kpi-grid kpi-grid-4">
-          <div class="kpi">
-            <div class="kpi-label">SKUs</div>
-            <div class="kpi-value" id="gSkus">—</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Inv total (pzas)</div>
-            <div class="kpi-value" id="gInv">—</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">% Riesgo (&lt;15 días)</div>
-            <div class="kpi-value" id="gRisk">—</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">% Sobreinv (&gt;60 días)</div>
-            <div class="kpi-value" id="gOver">—</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="grid2">
-        <section class="card chart-card">
-          <div class="card-header">
-            <h2>Distribución Cobertura (días)</h2>
-            <div class="hint">0–15, 16–30, 31–60, 61–120, &gt;120</div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="chartHist"></canvas>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <h2>Hallazgos automáticos</h2>
-            <div class="hint">Texto listo para dirección</div>
-          </div>
-          <ul id="insights" class="insights"></ul>
-        </section>
-      </section>
-
-      <!-- ✅ DIAGNÓSTICO (oculto por default) -->
-      <section class="card" style="margin-top:12px;">
-        <div class="card-header">
-          <h2>Diagnóstico de columnas</h2>
-
-          <div style="display:flex; gap:10px; align-items:center;">
-            <div class="hint">Solo para admin (debug)</div>
-            <button id="btnToggleDiag" class="btn secondary" type="button" style="padding:8px 10px;">
-              Mostrar diagnóstico
-            </button>
-          </div>
-        </div>
-
-        <div id="diagWrap" class="hidden" style="margin-top:10px;">
-          <div id="diagBox"
-               class="hint2"
-               style="
-                 white-space:pre-wrap;
-                 font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-                 background: rgba(0,0,0,.18);
-                 border:1px solid rgba(255,255,255,.08);
-                 padding:12px;
-                 border-radius:16px;
-                 overflow:auto;
-                 max-height:260px;">
-            —
-          </div>
-        </div>
-      </section>
-    </section>
-
-    <!-- ================== DETALLE POR SUCURSAL ================== -->
-    <section id="detailView" class="view hidden">
-      <section class="grid">
-        <section class="card filters">
-          <div class="card-header">
-            <h2>Filtros</h2>
-            <div class="hint">Clic en encabezados para ordenar</div>
-          </div>
-
-          <div class="form">
-            <div class="field">
-              <label>Sucursal</label>
-              <select id="warehouseSelect" disabled></select>
-            </div>
-
-            <div class="field">
-              <label>Clasificación</label>
-              <select id="classSelect" disabled>
-                <option value="ALL">Todas</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="Sin Mov">Sin Mov</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label>Búsqueda (Código o Descripción)</label>
-              <input id="searchInput" type="text" placeholder="Ej. BER 001600-4 o BARNIZ..." disabled />
-            </div>
-
-            <div class="field">
-              <label>Solo inventario &gt; 0</label>
-              <label class="switch">
-                <input id="onlyInvToggle" type="checkbox" disabled />
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <div class="field">
-              <label>Rango Cobertura (Días)</label>
-              <div class="range">
-                <input id="covMin" type="number" placeholder="Mín" disabled />
-                <input id="covMax" type="number" placeholder="Máx" disabled />
-              </div>
-              <div class="hint2">Deja vacío para no filtrar</div>
-            </div>
-
-            <button id="btnExport" class="btn" disabled>⬇️ Exportar vista (CSV)</button>
-          </div>
-        </section>
-
-        <section class="card kpis">
-          <div class="card-header">
-            <h2>KPIs sucursal</h2>
-            <div class="hint">Recalculados con filtros</div>
-          </div>
-
-          <div class="kpi-grid kpi-grid-4">
-            <div class="kpi">
-              <div class="kpi-label">Meses usados</div>
-              <div class="kpi-value" id="kpiMeses">—</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">SKUs (vista)</div>
-              <div class="kpi-value" id="kpiSkus">—</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Inv total (piezas)</div>
-              <div class="kpi-value" id="kpiInv">—</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Cobertura (días) mediana</div>
-              <div class="kpi-value" id="kpiCobMed">—</div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card table-card">
-          <div class="card-header">
-            <h2>Tabla</h2>
-            <div class="hint" id="tableHint">—</div>
-          </div>
-
-          <div class="table-wrap">
-            <table id="dataTable">
-              <thead></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </section>
-  </main>
-
-  <footer class="footer">
-    <div>© El Cedro • Web local para análisis interno • No sube archivos</div>
-  </footer>
-
-  <!-- ✅ Script pequeño SOLO para mostrar/ocultar (no toca app.js) -->
-  <script>
-    (function(){
-      const btn = document.getElementById("btnToggleDiag");
-      const wrap = document.getElementById("diagWrap");
-      if(!btn || !wrap) return;
-
-      btn.addEventListener("click", () => {
-        const hidden = wrap.classList.contains("hidden");
-        wrap.classList.toggle("hidden", !hidden);
-        btn.textContent = hidden ? "Ocultar diagnóstico" : "Mostrar diagnóstico";
-      });
-    })();
-  </script>
 </body>
 </html>
